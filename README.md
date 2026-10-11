@@ -3,7 +3,8 @@
 **English** · [简体中文](README_zh.md)
 
 Chinese (and mixed Chinese/English) transcription for Google AI Edge Foresight on macOS,
-without modifying the app.
+without modifying the app. Optionally, Foresight's chat runs on a bigger local model
+(Qwen3.8-27B) instead of the built-in Gemma 4 E2B.
 
 Unofficial and not affiliated with Google. No Google code or model weights are included.
 
@@ -17,6 +18,9 @@ Unofficial and not affiliated with Google. No Google code or model weights are i
 - Text appears once per spoken phrase, after each pause, rather than word by word.
 - Log: `~/Library/Logs/foresight-zh/shim.log`. Debug run that also logs every transcript
   result: `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`.
+
+- Chat goes to the local Qwen server when it is running and to Foresight's own Gemma
+  when it is not (see "Chat on a local model" below).
 
 ## Setup
 
@@ -102,12 +106,48 @@ audio sections, because Foresight runs speech on the GPU. It also swaps in a
 transcription-only template. `make_override.py` generates `pipeline_override.pb`, the options
 substituted in Gemma mode.
 
+## Chat on a local model
+
+Foresight's chat (questions about your notes and calendar) runs Gemma 4 E2B on-device. The
+shim can send it to a local OpenAI-compatible server instead. The default target is the
+Splash server for Qwen3.8-27B in `~/local-llm`:
+
+```bash
+~/local-llm/runtime/bin/splash-serve start qwen38-27b-splash
+echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"none"}' > ~/tools/foresight-zh/chat
+```
+
+The `chat` file is one line: `<base_url> [model] [{extra request fields}]`, or `off`. Without
+the file the shim uses `http://127.0.0.1:8096/v1 qwen3.8-27b-mtp` (llama.cpp). Relaunch
+Foresight after editing it.
+
+- The shim never starts the server: in `~/local-llm` only one model server runs at a time,
+  and starting one evicts the others. When the server is down, or a different model is on
+  the port, chat uses Gemma. The check is repeated every 5 seconds.
+- Sampling is left to the server, whose settings match the model's template mode. Replies
+  are capped at 2048 tokens, because llama.cpp keeps generating after a cancel.
+- Measured on Foresight queries (M5 Max): Qwen3.8-27B on Splash wrote ~212 chars/s,
+  against ~91 on llama.cpp. Qwen3.8-Flash-Next (MTPLX) was as fast but ignored retrieved
+  notes on one query and called the calendar tool instead.
+
+How it works: Foresight's chat uses LiteRT-LM's conversation C API with JSON messages
+(`litert_lm_create_conversation_v2`, `litert_lm_conversation_send_message_stream`, ...).
+The shim wraps those through the same `dlsym` interposition, converts the conversation
+(system prompt, notes context, history, the `search_calendar` tool) to an OpenAI chat
+request, streams the reply back in Foresight's chunk format, and turns tool calls into
+Foresight's tool-call messages. Other uses of the engine (summaries, audio, images) still
+run on Gemma. `FORESIGHT_ZH_TRACE=1` logs every other `litert_lm_*` call and saves the
+JSON arguments to `~/Library/Logs/foresight-zh/lm/`. `shim/test/chat_harness.c` replays
+saved conversations through the bridge.
+
 ## When Foresight updates
 
 The shim checks before acting and logs what it skipped:
 
 - **Filter regex not found:** the patch is skipped and Chinese may get stripped again. Find
   the new filter string and update `patch_ascii_filter` in `shim/foresight_zh.c`.
+- **Chat C API changed:** check `shim.log` for `chat:` lines, set `chat` to `off`, and
+  re-trace with `FORESIGHT_ZH_TRACE=1`.
 - **Speech C API changed:** the wrappers depend on the current argument layout and result
   struct. Check `shim.log`. Without the shim, the app is unaffected.
 
@@ -115,6 +155,9 @@ The shim checks before acting and logs what it skipped:
 
 - `shim/foresight_zh.c`: dlsym interposition, ODML hooks, filter patch, engine selection
 - `shim/sensevoice_engine.c`: VAD + SenseVoice engine via sherpa-onnx (loaded with `dlopen`)
+- `shim/chat_bridge.c`: chat on a local OpenAI-compatible server (libcurl)
+- `shim/cJSON.c`, `shim/cJSON.h`: [cJSON](https://github.com/DaveGamble/cJSON) v1.7.18 (MIT)
+- `shim/test/chat_harness.c`: replays saved Foresight conversations through the chat bridge
 - `shim/sherpa-onnx-c-api.h`: sherpa-onnx C API header (v1.13.8, Apache-2.0, Xiaomi Corporation)
 - `shim/test/sv_harness.c`: feeds a raw 48kHz float32 capture through the engine
 - `setup-sensevoice.sh`: downloads the engine; `shim/build.sh`: builds the shim

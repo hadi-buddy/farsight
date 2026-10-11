@@ -3,6 +3,7 @@
 [English](README.md) · **简体中文**
 
 让 macOS 上的 Google AI Edge Foresight 支持中文（以及中英混合）转写，无需修改应用本身。
+另外可选：让 Foresight 的聊天改用更大的本地模型（Qwen3.8-27B），代替自带的 Gemma 4 E2B。
 
 非官方项目，与 Google 无关。仓库中不包含任何 Google 代码或模型权重。
 
@@ -15,6 +16,8 @@
 - 文字按句出现：每次停顿后显示一段，而不是逐词显示。
 - 日志：`~/Library/Logs/foresight-zh/shim.log`。如需同时记录每条转写结果（调试用）：
   `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`。
+
+- 本地 Qwen 服务运行时，聊天走 Qwen；没运行时走 Foresight 自带的 Gemma（见下文"聊天改用本地模型"）。
 
 ## 安装步骤
 
@@ -92,12 +95,42 @@ echo gemma > ~/tools/foresight-zh/engine   # 切换引擎；删除这个文件�
 GPU 上运行语音模型），并换上仅用于转写的模板。`make_override.py` 生成 Gemma 模式下替换的
 选项文件 `pipeline_override.pb`。
 
+## 聊天改用本地模型
+
+Foresight 的聊天（询问笔记和日历）在本机运行 Gemma 4 E2B。shim 可以把它转到本地的
+OpenAI 兼容服务。默认目标是 `~/local-llm` 里的 Qwen3.8-27B Splash 服务：
+
+```bash
+~/local-llm/runtime/bin/splash-serve start qwen38-27b-splash
+echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"none"}' > ~/tools/foresight-zh/chat
+```
+
+`chat` 文件只有一行：`<base_url> [模型] [{额外请求字段}]`，或者 `off`。没有这个文件时默认
+使用 `http://127.0.0.1:8096/v1 qwen3.8-27b-mtp`（llama.cpp）。修改后需要重启 Foresight。
+
+- shim 不会自己启动模型服务：`~/local-llm` 同一时间只运行一个模型服务，启动一个会停掉其他的。
+  服务没运行、或者端口上是别的模型时，聊天用 Gemma。每 5 秒重新检查一次。
+- 采样参数交给服务端（与模型的模板模式匹配）。每次回复最多 2048 个 token，因为 llama.cpp
+  在取消后仍会继续生成。
+- 用 Foresight 的实际问题测试（M5 Max）：Splash 上的 Qwen3.8-27B 约每秒 212 字符，llama.cpp
+  约 91。Qwen3.8-Flash-Next（MTPLX）速度相近，但有一题忽略了检索到的笔记，转而调用日历工具。
+
+原理：Foresight 的聊天通过 LiteRT-LM 的对话 C API 传递 JSON 消息
+（`litert_lm_create_conversation_v2`、`litert_lm_conversation_send_message_stream` 等）。shim
+用同样的 `dlsym` 拦截接管这些函数，把对话（系统提示词、笔记上下文、历史、`search_calendar`
+工具）转换成 OpenAI 聊天请求，按 Foresight 的格式流式返回回复，并把工具调用转换成 Foresight
+的工具调用消息。引擎的其他用途（摘要、音频、图片）仍由 Gemma 处理。`FORESIGHT_ZH_TRACE=1`
+会记录其余的 `litert_lm_*` 调用，并把 JSON 参数保存到 `~/Library/Logs/foresight-zh/lm/`。
+`shim/test/chat_harness.c` 可以把保存的对话重新跑一遍。
+
 ## Foresight 更新之后
 
 shim 在动手前会先检查，跳过的步骤会写进日志：
 
 - **找不到过滤正则：** 跳过补丁，中文可能又会被删掉。找到新的过滤字符串，更新
   `shim/foresight_zh.c` 中的 `patch_ascii_filter`。
+- **聊天 C API 有变化：** 查看 `shim.log` 中的 `chat:` 行，把 `chat` 设为 `off`，再用
+  `FORESIGHT_ZH_TRACE=1` 重新跟踪。
 - **语音 C API 有变化：** 接管逻辑依赖当前的参数布局和结果结构。查看 `shim.log`。不加载 shim
   时应用不受影响。
 
@@ -105,6 +138,9 @@ shim 在动手前会先检查，跳过的步骤会写进日志：
 
 - `shim/foresight_zh.c`：dlsym 拦截、ODML 钩子、过滤器补丁、引擎选择
 - `shim/sensevoice_engine.c`：基于 sherpa-onnx 的 VAD + SenseVoice 引擎（通过 `dlopen` 加载）
+- `shim/chat_bridge.c`：把聊天转到本地 OpenAI 兼容服务（libcurl）
+- `shim/cJSON.c`、`shim/cJSON.h`：[cJSON](https://github.com/DaveGamble/cJSON) v1.7.18（MIT）
+- `shim/test/chat_harness.c`：把保存的 Foresight 对话送进聊天转接层测试
 - `shim/sherpa-onnx-c-api.h`：sherpa-onnx C API 头文件（v1.13.8，Apache-2.0，Xiaomi Corporation）
 - `shim/test/sv_harness.c`：把 48kHz float32 原始录音送进引擎做测试
 - `setup-sensevoice.sh`：下载引擎；`shim/build.sh`：构建 shim
