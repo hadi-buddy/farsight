@@ -17,6 +17,54 @@ ASR bundle is built locally from the Gemma model Foresight itself downloads.
 - Log: `~/Library/Logs/foresight-zh/shim.log`. Debug run that also logs every transcript
   result: `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`.
 
+## Setup
+
+1. **Install Foresight and open it once.** Let it finish downloading its models. The build
+   uses its Gemma 4 E2B download (`models/15`, about 3.7GB) in
+   `~/Library/Application Support/com.google.AIEdgeForesight/models/`.
+2. **Install Google's LiteRT-LM tools** (open source, used to unpack and repack `.litertlm` files):
+
+   ```bash
+   uv venv ~/local-llm/venvs/litert --python 3.12
+   uv pip install -p ~/local-llm/venvs/litert/bin/python litert-lm-api litert-lm
+   ```
+
+3. **Build the Chinese ASR model:**
+
+   ```bash
+   model-build/build.sh
+   ```
+
+   This takes a few seconds and writes about 3.4GB to
+   `~/local-llm/models/special/foresight-zh/zh_asr_gemma4e2b_v3.litertlm`. The script:
+   - unpacks the Gemma 4 E2B file with `litert-lm-peek`
+   - keeps the tokenizer, embedders, audio encoder, audio adapter, end-of-audio and decoder
+     sections, and drops the vision sections and the speculative-decoding drafter
+     (`model-build/model.toml`)
+   - drops the `backend_constraint = "cpu"` tag on the audio sections, because Foresight runs
+     its speech encoder on the GPU
+   - replaces the chat template with a transcription-only one
+     (`model-build/LlmMetadataProto.pbtext`)
+   - repacks everything with `litert-lm-builder`
+
+   Override paths with `LITERT_VENV=...` and `OUT=...`. If you write the model somewhere
+   else, put its path in `~/tools/foresight-zh/asr_model_path` (one line) so the shim
+   finds it. Quit Foresight before rebuilding: it memory-maps the model while running.
+
+4. **Build the shim:**
+
+   ```bash
+   cd shim && clang -arch arm64 -dynamiclib -O2 -Wall -o libforesight_zh.dylib foresight_zh.c
+   ```
+
+5. **Optional, make a Dock/Spotlight launcher:**
+
+   ```bash
+   osacompile -o ~/Applications/"Foresight 中文.app" -e 'do shell script "$HOME/tools/foresight-zh/launch.sh"'
+   ```
+
+The shim and launcher expect this repo at `~/tools/foresight-zh`.
+
 ## How it works
 
 Foresight's live transcription runs a separate on-device ASR model (`models/3`, English-only,
@@ -52,9 +100,8 @@ The shim checks before acting and logs what it skipped:
   the new filter string and update `patch_ascii_filter` in `shim/foresight_zh.c`.
 - **Speech C API changed:** model redirect and options rewrite are tied to the current
   argument layout. Check `shim.log` for errors. Without the shim, the app is unaffected.
-- **Gemma model id/path changed:** rebuild the ASR bundle with `model-build/build.sh`.
-
-Build the shim (required after cloning): `cd shim && clang -arch arm64 -dynamiclib -O2 -Wall -o libforesight_zh.dylib foresight_zh.c`.
+- **Gemma model id/path changed:** rebuild the ASR bundle with `model-build/build.sh`. It
+  stops with "missing section" if the Gemma file layout changed; update `model.toml` to match.
 
 ## Files
 

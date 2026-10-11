@@ -16,6 +16,50 @@
 - 日志：`~/Library/Logs/foresight-zh/shim.log`。如需同时记录每条转写结果（调试用）：
   `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`。
 
+## 安装步骤
+
+1. **安装 Foresight 并打开一次**，等它下载完模型。构建时会用到它下载的 Gemma 4 E2B
+   （`models/15`，约 3.7GB），位于 `~/Library/Application Support/com.google.AIEdgeForesight/models/`。
+2. **安装 Google 的 LiteRT-LM 工具**（开源，用来拆包和重新打包 `.litertlm` 文件）：
+
+   ```bash
+   uv venv ~/local-llm/venvs/litert --python 3.12
+   uv pip install -p ~/local-llm/venvs/litert/bin/python litert-lm-api litert-lm
+   ```
+
+3. **构建中文 ASR 模型：**
+
+   ```bash
+   model-build/build.sh
+   ```
+
+   几秒钟即可完成，输出约 3.4GB 的
+   `~/local-llm/models/special/foresight-zh/zh_asr_gemma4e2b_v3.litertlm`。脚本会：
+   - 用 `litert-lm-peek` 拆开 Gemma 4 E2B 模型文件
+   - 保留分词器、嵌入层、音频编码器、音频适配器、音频结束标记和解码器，去掉视觉部分和
+     推测解码的 drafter（`model-build/model.toml`）
+   - 去掉音频部分的 `backend_constraint = "cpu"` 标记，因为 Foresight 在 GPU 上运行语音编码器
+   - 把聊天模板换成仅用于转写的模板（`model-build/LlmMetadataProto.pbtext`）
+   - 用 `litert-lm-builder` 重新打包
+
+   可以用 `LITERT_VENV=...` 和 `OUT=...` 修改路径。如果模型放在别处，把路径写进
+   `~/tools/foresight-zh/asr_model_path`（一行），shim 就能找到它。重新构建前请先退出
+   Foresight：它运行时会内存映射这个模型文件。
+
+4. **构建 shim：**
+
+   ```bash
+   cd shim && clang -arch arm64 -dynamiclib -O2 -Wall -o libforesight_zh.dylib foresight_zh.c
+   ```
+
+5. **可选：生成 Dock / Spotlight 启动器：**
+
+   ```bash
+   osacompile -o ~/Applications/"Foresight 中文.app" -e 'do shell script "$HOME/tools/foresight-zh/launch.sh"'
+   ```
+
+shim 和启动脚本默认本仓库位于 `~/tools/foresight-zh`。
+
 ## 工作原理
 
 Foresight 的实时转写使用一个独立的本地 ASR 模型（`models/3`，仅支持英文，流式 USM 编码器 +
@@ -49,9 +93,8 @@ shim 在动手前会先检查，跳过的步骤会写进日志：
   `shim/foresight_zh.c` 中的 `patch_ascii_filter`。
 - **语音 C API 有变化：** 模型重定向和选项改写依赖当前的参数布局。查看 `shim.log` 中的错误。
   不加载 shim 时应用不受影响。
-- **Gemma 模型的 ID 或路径有变化：** 用 `model-build/build.sh` 重新构建 ASR 模型包。
-
-构建 shim（clone 之后必须执行）：`cd shim && clang -arch arm64 -dynamiclib -O2 -Wall -o libforesight_zh.dylib foresight_zh.c`。
+- **Gemma 模型的 ID 或路径有变化：** 用 `model-build/build.sh` 重新构建 ASR 模型包。如果
+  Gemma 文件结构变了，脚本会报 "missing section" 并停止，这时需要相应更新 `model.toml`。
 
 ## 文件说明
 
