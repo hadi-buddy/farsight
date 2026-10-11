@@ -1,2 +1,4 @@
 *.dylib
 .DS_Store
+chat
+engine

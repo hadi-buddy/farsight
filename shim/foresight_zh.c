@@ -46,6 +46,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "chat_bridge.h"
 #include "sensevoice_engine.h"
 
 typedef uint64_t u64;
@@ -344,8 +345,96 @@ static u64 call_hook(int i, u64 a[8]) {
 W(0) W(1) W(2) W(3) W(4)
 static fn8 g_wrappers[NHOOK] = {w0, w1, w2, w3, w4};
 
+// ------------------------------------------------------ litert_lm tracer ---
+// Trace mode only: logs every litert_lm_* (chat) call. Real call first, so FP
+// argument registers reach it untouched; logging happens after.
+
+#define NTRACE 32
+static struct { const char *name; fn8 real; } g_tr[NTRACE];
+static int g_ntr;
+
+static void fmt_arg(u64 v, char *out, size_t n) {
+  char s[4096];
+  if (v > 0x100000000ULL && v < 0x0001000000000000ULL && read_cstr(v, s, sizeof s)) {
+    size_t len = strlen(s), ok = len >= 2;
+    for (size_t k = 0; k < len && ok; k++)
+      if ((unsigned char)s[k] < 0x20 && s[k] != '\n' && s[k] != '\t' && s[k] != '\r') ok = 0;
+    if (ok) {
+      snprintf(out, n, "\"%s\"", s);
+      return;
+    }
+  }
+  snprintf(out, n, "0x%llx", (unsigned long long)v);
+}
+
+static void dump_str(const char *fn, int k, u64 v) {
+  static int seq;
+  if (v < 0x100000000ULL || v >= 0x0001000000000000ULL) return;
+  char probe[2];
+  if (!safe_read(v, probe, 1) || probe[0] != '{') return;
+  size_t len = strnlen((const char *)v, 1 << 22);
+  char p[900];
+  snprintf(p, sizeof p, "%s/Library/Logs/foresight-zh/lm", g_home);
+  mkdir(p, 0755);
+  snprintf(p, sizeof p, "%s/Library/Logs/foresight-zh/lm/%04d-%s-arg%d.json", g_home,
+           __sync_add_and_fetch(&seq, 1), fn + 10, k);
+  FILE *f = fopen(p, "w");
+  if (f) {
+    fwrite((const void *)v, 1, len, f);
+    fclose(f);
+  }
+}
+
+static u64 trace_call(int i, u64 *a) {
+  if (strcmp(g_tr[i].name, "litert_lm_free_response_string") == 0) {
+    char s[4200];
+    fmt_arg(a[0], s, sizeof s);
+    logf_("LM chunk %s", s);
+    return g_tr[i].real(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+  }
+  for (int k = 0; k < 3; k++) dump_str(g_tr[i].name, k, a[k]);
+  u64 r = g_tr[i].real(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7]);
+  char b[6][4200], rb[4200];
+  for (int k = 0; k < 6; k++) fmt_arg(a[k], b[k], sizeof b[k]);
+  fmt_arg(r, rb, sizeof rb);
+  logf_("LM %s(%s, %s, %s, %s, %s, %s) -> %s", g_tr[i].name, b[0], b[1], b[2], b[3], b[4], b[5], rb);
+  return r;
+}
+
+#define T(i)                                                                            \
+  static u64 t##i(u64 a0, u64 a1, u64 a2, u64 a3, u64 a4, u64 a5, u64 a6, u64 a7) {     \
+    u64 a[8] = {a0, a1, a2, a3, a4, a5, a6, a7};                                        \
+    return trace_call(i, a);                                                            \
+  }
+T(0) T(1) T(2) T(3) T(4) T(5) T(6) T(7) T(8) T(9) T(10) T(11) T(12) T(13) T(14) T(15)
+T(16) T(17) T(18) T(19) T(20) T(21) T(22) T(23) T(24) T(25) T(26) T(27) T(28) T(29) T(30) T(31)
+static fn8 g_tw[NTRACE] = {t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15,
+                           t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31};
+
+static void *trace_wrap(const char *symbol, void *p) {
+  pthread_mutex_lock(&g_mu);
+  int i;
+  for (i = 0; i < g_ntr; i++)
+    if (strcmp(g_tr[i].name, symbol) == 0) break;
+  if (i == g_ntr && g_ntr < NTRACE) {
+    g_tr[i].name = strdup(symbol);
+    g_tr[i].real = (fn8)p;
+    g_ntr++;
+  }
+  pthread_mutex_unlock(&g_mu);
+  return i < NTRACE ? (void *)g_tw[i] : p;
+}
+
 static void *my_dlsym(void *handle, const char *symbol) {
   void *p = dlsym(handle, symbol);
+  if (p && symbol && strncmp(symbol, "litert_lm_", 10) == 0) {
+    void *w = chat_bridge_wrap(symbol, p);
+    if (w) return w;
+  }
+  if (p && symbol && g_trace && strncmp(symbol, "litert_lm_", 10) == 0) {
+    logf_("dlsym %s", symbol);
+    return trace_wrap(symbol, p);
+  }
   if (!p || !symbol || strncmp(symbol, "Odml", 4) != 0) return p;
   for (int i = 0; i < NHOOK; i++) {
     if (strcmp(symbol, g_hooks[i].name) == 0) {
@@ -375,5 +464,6 @@ __attribute__((constructor)) static void init(void) {
   FILE *m = fopen(marker, "w");
   if (m) { fprintf(m, "%d\n", getpid()); fclose(m); }
   load_config();
+  chat_bridge_init(g_home, g_trace);
   patch_ascii_filter();
 }
