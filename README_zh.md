@@ -4,8 +4,7 @@
 
 让 macOS 上的 Google AI Edge Foresight 支持中文（以及中英混合）转写，无需修改应用本身。
 
-非官方项目，与 Google 无关。仓库中不包含任何 Google 代码或模型权重：ASR 模型包是在本机
-用 Foresight 自己下载的 Gemma 模型构建的。
+非官方项目，与 Google 无关。仓库中不包含任何 Google 代码或模型权重。
 
 ## 使用方法
 
@@ -13,77 +12,73 @@
   如果 Foresight 已在运行，它会先退出，再带着 shim 重新启动。
 - 用其他方式启动 Foresight（Dock、Spotlight、登录项、点击通知）不会加载 shim。应用照常可用，
   但只能转写英文。
+- 文字按句出现：每次停顿后显示一段，而不是逐词显示。
 - 日志：`~/Library/Logs/foresight-zh/shim.log`。如需同时记录每条转写结果（调试用）：
   `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`。
 
 ## 安装步骤
 
-1. **安装 Foresight 并打开一次**，等它下载完模型。构建时会用到它下载的 Gemma 4 E2B
-   （`models/15`，约 3.7GB），位于 `~/Library/Application Support/com.google.AIEdgeForesight/models/`。
-2. **安装 Google 的 LiteRT-LM 工具**（开源，用来拆包和重新打包 `.litertlm` 文件）：
+shim 和启动脚本默认本仓库位于 `~/tools/foresight-zh`。
+
+1. 安装 Foresight 并打开一次。
+2. 下载转写引擎（约 270MB）：[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) C 库、
+   SenseVoice-Small（int8）和 Silero VAD，存放在 `~/local-llm/models/special/foresight-zh/`：
 
    ```bash
-   uv venv ~/local-llm/venvs/litert --python 3.12
-   uv pip install -p ~/local-llm/venvs/litert/bin/python litert-lm-api litert-lm
+   ./setup-sensevoice.sh
    ```
 
-3. **构建中文 ASR 模型：**
+3. 构建 shim：
 
    ```bash
-   model-build/build.sh
+   shim/build.sh
    ```
 
-   几秒钟即可完成，输出约 3.4GB 的
-   `~/local-llm/models/special/foresight-zh/zh_asr_gemma4e2b_v3.litertlm`。脚本会：
-   - 用 `litert-lm-peek` 拆开 Gemma 4 E2B 模型文件
-   - 保留分词器、嵌入层、音频编码器、音频适配器、音频结束标记和解码器，去掉视觉部分和
-     推测解码的 drafter（`model-build/model.toml`）
-   - 去掉音频部分的 `backend_constraint = "cpu"` 标记，因为 Foresight 在 GPU 上运行语音编码器
-   - 把聊天模板换成仅用于转写的模板（`model-build/LlmMetadataProto.pbtext`）
-   - 用 `litert-lm-builder` 重新打包
-
-   可以用 `LITERT_VENV=...` 和 `OUT=...` 修改路径。如果模型放在别处，把路径写进
-   `~/tools/foresight-zh/asr_model_path`（一行），shim 就能找到它。重新构建前请先退出
-   Foresight：它运行时会内存映射这个模型文件。
-
-4. **构建 shim：**
-
-   ```bash
-   cd shim && clang -arch arm64 -dynamiclib -O2 -Wall -o libforesight_zh.dylib foresight_zh.c
-   ```
-
-5. **可选：生成 Dock / Spotlight 启动器：**
+4. 可选：生成 Dock / Spotlight 启动器：
 
    ```bash
    osacompile -o ~/Applications/"Foresight 中文.app" -e 'do shell script "$HOME/tools/foresight-zh/launch.sh"'
    ```
 
-shim 和启动脚本默认本仓库位于 `~/tools/foresight-zh`。
-
 ## 工作原理
 
-Foresight 的实时转写使用一个独立的本地 ASR 模型（`models/3`，仅支持英文，流式 USM 编码器 +
-小型解码器），由 Google 闭源的 ODML 转写库运行。Dart 界面层通过导出的 C API 调用它
+Foresight 的实时转写由 Google 闭源的 ODML 转写库完成。Dart 界面层通过导出的 C API 调用它
 （`OdmlCreateInferenceEngine`、`OdmlCreateSpeechPipelineFromProto`、
-`OdmlSpeechProcessorTranscribe` 等）。
+`OdmlSpeechProcessorTranscribe`、`OdmlSpeechProcessorFinishStream` 等）。它自带的模型
+（`models/3`）只支持英文。
 
 `shim/libforesight_zh.dylib` 通过 `DYLD_INSERT_LIBRARIES` 注入。应用的 entitlements 允许这样做
 （`allow-dyld-environment-variables`、`disable-library-validation`），因此 Google 的代码签名和
-钥匙串访问都不受影响。shim 做三件事：
+钥匙串访问都不受影响。shim 做两件事：
 
-1. **模型重定向。** 拦截 `dlsym`（Dart FFI 用它查找符号），把 ASR 引擎指向
-   `~/local-llm/models/special/foresight-zh/zh_asr_gemma4e2b_v3.litertlm`。这个文件把
-   Foresight 已下载的 Gemma 4 E2B 模型（`models/15`）中的音频编码器、适配器和解码器重新打包成
-   仅用于转写的模型包。音频编码器按应用要求在 GPU 上运行。
-2. **选项改写。** 应用请求的是带中间结果的流式模式，而 Gemma 的音频编码器只支持批处理，会报
-   "Streaming audio encoder is not available"。shim 用 `pipeline_override.pb` 替换这些选项：
-   关闭流式，开启 VAD 分段，并使用 Gemma 对话格式的提示词，要求输出简体中文、英文保持原样。
-   重新生成：`python3 make_override.py pipeline_override.pb`。
-3. **过滤器补丁。** Dart 层会用正则 `[^\x20-\x7E\n\r]` 删掉转写文本中所有非可打印 ASCII 字符，
-   中文因此被全部删除。shim 在内存中（写时复制页面，磁盘上的程序不变）把这个正则常量改成
-   `[\x00-\x08\x7F]+`。
+1. **替换语音识别。** 拦截 `dlsym`（Dart FFI 用它查找 C API），接管
+   `OdmlSpeechProcessorTranscribe` 和 `OdmlSpeechProcessorFinishStream`。Foresight 传入的音频
+   （48kHz 浮点，麦克风和系统声音各一路）先重采样到 16kHz，再用 Silero VAD 按停顿切分成句，
+   每句在 CPU 上用 SenseVoice-Small 转写（通常 15–85 毫秒）。结果按 Foresight 自己的格式返回
+   （`text`、`is_final`、以微秒计的起止时间）。Foresight 自带的英文引擎仍会加载，但不再运行。
+   见 `shim/sensevoice_engine.c`。
+2. **去掉 ASCII 过滤。** Dart 层会用正则 `[^\x20-\x7E\n\r]` 删掉转写文本中所有非可打印 ASCII
+   字符，中文因此被全部删除。shim 在内存中（写时复制页面，磁盘上的程序不变）把这个正则常量
+   改成 `[\x00-\x08\x7F]+`。
 
-文字按句出现：每次停顿后显示一段，而不是逐词显示。
+如果 SenseVoice 文件缺失或加载失败，shim 会退回 Foresight 自带的引擎（英文）。
+
+### 备选引擎：Gemma 4 E2B
+
+在 SenseVoice 之前，shim 让 Foresight 自己的转写流程运行一个由 Gemma 4 E2B（Foresight 自己
+下载的模型）重新打包的模型：重定向模型路径，并把转写选项改成批处理加转写提示词。这个方案可用，
+但需要一份 3.4GB 的 Gemma 副本，内存占用也更大。启用方法：
+
+```bash
+uv venv ~/local-llm/venvs/litert --python 3.12
+uv pip install -p ~/local-llm/venvs/litert/bin/python litert-lm-api litert-lm
+model-build/build.sh                       # 把 models/15 重新打包成 ASR 模型
+echo gemma > ~/tools/foresight-zh/engine   # 切换引擎；删除这个文件即恢复默认
+```
+
+`model-build/build.sh` 会去掉视觉部分、drafter，以及音频部分的"仅限 CPU"标记（Foresight 在
+GPU 上运行语音模型），并换上仅用于转写的模板。`make_override.py` 生成 Gemma 模式下替换的
+选项文件 `pipeline_override.pb`。
 
 ## Foresight 更新之后
 
@@ -91,16 +86,15 @@ shim 在动手前会先检查，跳过的步骤会写进日志：
 
 - **找不到过滤正则：** 跳过补丁，中文可能又会被删掉。找到新的过滤字符串，更新
   `shim/foresight_zh.c` 中的 `patch_ascii_filter`。
-- **语音 C API 有变化：** 模型重定向和选项改写依赖当前的参数布局。查看 `shim.log` 中的错误。
-  不加载 shim 时应用不受影响。
-- **Gemma 模型的 ID 或路径有变化：** 用 `model-build/build.sh` 重新构建 ASR 模型包。如果
-  Gemma 文件结构变了，脚本会报 "missing section" 并停止，这时需要相应更新 `model.toml`。
+- **语音 C API 有变化：** 接管逻辑依赖当前的参数布局和结果结构。查看 `shim.log`。不加载 shim
+  时应用不受影响。
 
 ## 文件说明
 
-- `shim/foresight_zh.c`：shim 源码；`shim/libforesight_zh.dylib`：编译好的 shim
+- `shim/foresight_zh.c`：dlsym 拦截、ODML 钩子、过滤器补丁、引擎选择
+- `shim/sensevoice_engine.c`：基于 sherpa-onnx 的 VAD + SenseVoice 引擎（通过 `dlopen` 加载）
+- `shim/sherpa-onnx-c-api.h`：sherpa-onnx C API 头文件（v1.13.8，Apache-2.0，Xiaomi Corporation）
+- `shim/test/sv_harness.c`：把 48kHz float32 原始录音送进引擎做测试
+- `setup-sensevoice.sh`：下载引擎；`shim/build.sh`：构建 shim
 - `launch.sh`：启动脚本；`~/Applications/Foresight 中文.app` 是它的封装
-- `make_override.py`、`pipeline_override.pb`：shim 替换进去的语音处理选项
-- `model-build/`：Gemma ASR 模型包的构建方法
-- `~/local-llm/models/special/foresight-backup/`：Foresight 原版 ASR 模型（加密版和解密版），
-  留作参考
+- `model-build/`、`make_override.py`、`pipeline_override.pb`：Gemma 备选方案
