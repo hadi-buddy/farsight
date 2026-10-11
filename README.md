@@ -1,5 +1,7 @@
 # foresight-zh
 
+**English** · [简体中文](README_zh.md)
+
 Chinese (and mixed Chinese/English) transcription for Google AI Edge Foresight on macOS,
 without modifying the app.
 
