@@ -102,7 +102,7 @@ OpenAI 兼容服务。默认目标是 `~/local-llm` 里的 Qwen3.8-27B Splash �
 
 ```bash
 ~/local-llm/runtime/bin/splash-serve start qwen38-27b-splash
-echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"none"}' > ~/tools/foresight-zh/chat
+echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"none","temperature":0.7,"top_p":0.8,"top_k":20}' > ~/tools/foresight-zh/chat
 ```
 
 `chat` 文件只有一行：`<base_url> [模型] [{额外请求字段}]`，或者 `off`。没有这个文件时默认
@@ -110,8 +110,11 @@ echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"no
 
 - shim 不会自己启动模型服务：`~/local-llm` 同一时间只运行一个模型服务，启动一个会停掉其他的。
   服务没运行、或者端口上是别的模型时，聊天用 Gemma。每 5 秒重新检查一次。
-- 采样参数交给服务端（与模型的模板模式匹配）。每次回复最多 2048 个 token，因为 llama.cpp
-  在取消后仍会继续生成。
+- Foresight 自己的采样参数（temperature 0.4、top_k 40，为 Gemma 调的）不会转发。llama.cpp
+  服务端会自动使用 Qwen 的非思考模式参数；Splash 服务端没有默认值，所以上面的 `chat` 行自己
+  带上：关闭思考，temperature 0.7、top_p 0.8、top_k 20。Qwen 推荐的第四个参数
+  `presence_penalty` 会被 Splash 拒绝。
+- 每次回复最多 2048 个 token，因为 llama.cpp 在取消后仍会继续生成。
 - 用 Foresight 的实际问题测试（M5 Max）：Splash 上的 Qwen3.8-27B 约每秒 212 字符，llama.cpp
   约 91。Qwen3.8-Flash-Next（MTPLX）速度相近，但有一题忽略了检索到的笔记，转而调用日历工具。
 
