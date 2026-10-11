@@ -70,7 +70,7 @@ Dart UI calls it through an exported C API (`OdmlCreateInferenceEngine`,
 
 `shim/libforesight_zh.dylib` is injected with `DYLD_INSERT_LIBRARIES`. The app's
 entitlements allow that (`allow-dyld-environment-variables`, `disable-library-validation`),
-so Google's code signature and keychain access are untouched. The shim does two things:
+so Google's code signature and keychain access are untouched. The shim does three things for transcription:
 
 1. **Replaces speech recognition.** It interposes `dlsym`, which Dart FFI uses to find the C
    API, and wraps `OdmlSpeechProcessorTranscribe` and `OdmlSpeechProcessorFinishStream`.
@@ -83,6 +83,13 @@ so Google's code signature and keychain access are untouched. The shim does two 
    from transcripts (`[^\x20-\x7E\n\r]`), which deletes all Chinese. The shim patches that
    regex constant in memory (copy-on-write page; the binary on disk is unchanged) to
    `[\x00-\x08\x7F]+`.
+
+3. **Spaces Chinese for Foresight's word counts.** Foresight measures transcripts in
+   space-separated words. It builds the live transcript chunks that chat searches, and offers
+   the meeting summary, only past a word threshold, so unspaced Chinese looked nearly empty:
+   no summary button and no meeting context in chat. The shim puts a hair space (U+200A,
+   near-invisible) at every boundary next to a CJK character. The chat bridge removes them
+   again before text reaches the model.
 
 If the SenseVoice files are missing or fail to load, the shim falls back to Foresight's own
 engine (English).
@@ -133,14 +140,22 @@ Foresight after editing it.
   against ~91 on llama.cpp. Qwen3.8-Flash-Next (MTPLX) was as fast but ignored retrieved
   notes on one query and called the calendar tool instead.
 
+- Meeting summaries are generated through the same bridge. Foresight's summary prompts are
+  English, so for a mostly-Chinese transcript the bridge asks for Simplified Chinese output,
+  keeping the template headings (`# Overview`, `# Details`).
+- Limits: during a meeting, Foresight finds transcript passages by searching with your
+  question, so ask in the meeting's language (English questions do not match Chinese
+  passages). Meetings recorded before the spacing change keep unspaced transcripts and get
+  no summary button.
+
 How it works: Foresight's chat uses LiteRT-LM's conversation C API with JSON messages
 (`litert_lm_create_conversation_v2`, `litert_lm_conversation_send_message_stream`, ...).
 The shim wraps those through the same `dlsym` interposition, converts the conversation
 (system prompt, notes context, history, the `search_calendar` tool) to an OpenAI chat
 request, streams the reply back in Foresight's chunk format, and turns tool calls into
 Foresight's tool-call messages. Other uses of the engine (summaries, audio, images) still
-run on Gemma. `FORESIGHT_ZH_TRACE=1` logs every other `litert_lm_*` call and saves the
-JSON arguments to `~/Library/Logs/foresight-zh/lm/`. `shim/test/chat_harness.c` replays
+run on Gemma. `FORESIGHT_ZH_TRACE=1` logs every `dlsym` lookup and every other `litert_lm_*` call, and
+saves their JSON arguments and the bridge's requests to `~/Library/Logs/foresight-zh/lm/`. `shim/test/chat_harness.c` replays
 saved conversations through the bridge.
 
 ## When Foresight updates

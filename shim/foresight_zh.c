@@ -249,6 +249,48 @@ static void log_results(const char *fn, u64 list_pp) {
   }
 }
 
+// Foresight measures transcripts in space-separated words: it only builds live
+// chat chunks and offers a summary once there are enough of them, so unspaced
+// Chinese looks nearly empty. Put a hair space (U+200A, near-invisible) at every
+// boundary next to a CJK character; the chat bridge strips them again.
+static int is_cjk(uint32_t c) {
+  return (c >= 0x2E80 && c <= 0x9FFF) || (c >= 0xAC00 && c <= 0xD7AF) || (c >= 0xF900 && c <= 0xFAFF) ||
+         (c >= 0xFF00 && c <= 0xFFEF) || (c >= 0x20000 && c <= 0x3FFFF);
+}
+
+static uint32_t utf8_next(const unsigned char **p) {
+  const unsigned char *s = *p;
+  uint32_t c = s[0];
+  int n = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
+  if (n > 1) c &= 0xFF >> (n + 1);
+  for (int i = 1; i < n && s[i]; i++) c = (c << 6) | (s[i] & 0x3F);
+  for (int i = 0; i < n && **p; i++) (*p)++;
+  return c;
+}
+
+static char *space_cjk(char *text) {
+  size_t len = strlen(text);
+  char *out = malloc(len * 4 + 1), *o = out;
+  const unsigned char *p = (const unsigned char *)text;
+  uint32_t prev = 0;
+  while (*p) {
+    const unsigned char *start = p;
+    uint32_t c = utf8_next(&p);
+    int space = c == ' ' || c == '\n' || c == '\t' || c == 0x200A;
+    int prev_space = prev == 0 || prev == ' ' || prev == '\n' || prev == '\t' || prev == 0x200A;
+    if (!space && !prev_space && (is_cjk(c) || is_cjk(prev))) {
+      memcpy(o, "\xE2\x80\x8A", 3);
+      o += 3;
+    }
+    memcpy(o, start, p - start);
+    o += p - start;
+    prev = c;
+  }
+  *o = 0;
+  free(text);
+  return out;
+}
+
 // Builds an OdmlTranscriptionResultList / OdmlStatus exactly as the native
 // library does (malloc'ed; freed by OdmlDestroyTranscriptionResultList / Status).
 static void *make_result_list(SvResult *r, int n) {
@@ -256,6 +298,7 @@ static void *make_result_list(SvResult *r, int n) {
   uint8_t *items = n > 0 ? calloc(n, 0x30) : NULL;
   for (int k = 0; k < n; k++) {
     uint8_t *it = items + k * 0x30;
+    r[k].text = space_cjk(r[k].text);
     *(char **)it = r[k].text;              // text
     it[8] = 1;                             // is_final
     *(long long *)(it + 0x10) = r[k].start_us;
@@ -435,6 +478,7 @@ static void *my_dlsym(void *handle, const char *symbol) {
     logf_("dlsym %s", symbol);
     return trace_wrap(symbol, p);
   }
+  if (g_trace && symbol) logf_("dlsym %s%s", symbol, p ? "" : " (not found)");
   if (!p || !symbol || strncmp(symbol, "Odml", 4) != 0) return p;
   for (int i = 0; i < NHOOK; i++) {
     if (strcmp(symbol, g_hooks[i].name) == 0) {
