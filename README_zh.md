@@ -10,8 +10,8 @@
 
 - 打开 **`~/Applications/Foresight 中文.app`**（或运行 `~/tools/foresight-zh/launch.sh`）。
   如果 Foresight 已在运行，它会先退出，再带着 shim 重新启动。
-- 用其他方式启动 Foresight（Dock、Spotlight、登录项、点击通知）不会加载 shim。应用照常可用，
-  但只能转写英文。
+- 用其他方式启动 Foresight（Dock、Spotlight、登录项、点击通知）不会加载 shim：应用照常可用，
+  但只能转写英文。下面的可选守护程序可以自动解决这个问题。
 - 文字按句出现：每次停顿后显示一段，而不是逐词显示。
 - 日志：`~/Library/Logs/foresight-zh/shim.log`。如需同时记录每条转写结果（调试用）：
   `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`。
@@ -39,6 +39,18 @@ shim 和启动脚本默认本仓库位于 `~/tools/foresight-zh`。
    ```bash
    osacompile -o ~/Applications/"Foresight 中文.app" -e 'do shell script "$HOME/tools/foresight-zh/launch.sh"'
    ```
+
+5. 可选：安装自动重启守护程序。这个 LaunchAgent 每 5 秒检查一次，如果 Foresight 没有加载 shim，
+   就通过 `launch.sh` 重新启动它。Dock 直接启动、通知、登录项、更新等情况都能覆盖。重启发生在
+   普通启动后几秒内，所以这几秒内不要开始录音。5 分钟内最多重启 3 次。
+
+   ```bash
+   ./install-watcher.sh              # 安装并启动
+   ./install-watcher.sh --uninstall  # 卸载
+   touch ~/Library/Logs/foresight-zh/watcher.paused   # 暂停（删除该文件即恢复）
+   ```
+
+   日志：`~/Library/Logs/foresight-zh/watcher.log`。
 
 ## 工作原理
 
@@ -97,4 +109,6 @@ shim 在动手前会先检查，跳过的步骤会写进日志：
 - `shim/test/sv_harness.c`：把 48kHz float32 原始录音送进引擎做测试
 - `setup-sensevoice.sh`：下载引擎；`shim/build.sh`：构建 shim
 - `launch.sh`：启动脚本；`~/Applications/Foresight 中文.app` 是它的封装
+- `watcher.sh`、`install-watcher.sh`：自动重启的 LaunchAgent（通过
+  `~/Library/Logs/foresight-zh/shim.pid` 判断 shim 是否已加载）
 - `model-build/`、`make_override.py`、`pipeline_override.pb`：Gemma 备选方案

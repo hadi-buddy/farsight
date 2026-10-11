@@ -12,7 +12,8 @@ Unofficial and not affiliated with Google. No Google code or model weights are i
 - Launch **`~/Applications/Foresight 中文.app`** (or run `~/tools/foresight-zh/launch.sh`).
   It quits a running Foresight and relaunches it with the shim.
 - Launching Foresight any other way (Dock, Spotlight, login item, a notification) starts it
-  *without* the shim. It still works, but transcribes English only.
+  *without* the shim: it still works, but transcribes English only. The optional watcher
+  below fixes that automatically.
 - Text appears once per spoken phrase, after each pause, rather than word by word.
 - Log: `~/Library/Logs/foresight-zh/shim.log`. Debug run that also logs every transcript
   result: `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`.
@@ -41,6 +42,20 @@ The shim and launcher expect this repo at `~/tools/foresight-zh`.
    ```bash
    osacompile -o ~/Applications/"Foresight 中文.app" -e 'do shell script "$HOME/tools/foresight-zh/launch.sh"'
    ```
+
+5. Optional, install the auto-relaunch watcher. This LaunchAgent checks every 5 seconds,
+   and if Foresight is running without the shim, relaunches it through `launch.sh`. That
+   covers plain launches from the Dock, notifications, login items and updates. The restart
+   happens a few seconds after a plain launch, so avoid starting a recording in that
+   window. It relaunches at most 3 times in 5 minutes.
+
+   ```bash
+   ./install-watcher.sh              # install and start
+   ./install-watcher.sh --uninstall  # remove
+   touch ~/Library/Logs/foresight-zh/watcher.paused   # pause (rm the file to resume)
+   ```
+
+   Log: `~/Library/Logs/foresight-zh/watcher.log`.
 
 ## How it works
 
@@ -104,4 +119,6 @@ The shim checks before acting and logs what it skipped:
 - `shim/test/sv_harness.c`: feeds a raw 48kHz float32 capture through the engine
 - `setup-sensevoice.sh`: downloads the engine; `shim/build.sh`: builds the shim
 - `launch.sh`: launcher; `~/Applications/Foresight 中文.app` wraps it
+- `watcher.sh`, `install-watcher.sh`: auto-relaunch LaunchAgent (detects the shim through
+  `~/Library/Logs/foresight-zh/shim.pid`)
 - `model-build/`, `make_override.py`, `pipeline_override.pb`: the Gemma alternative
