@@ -369,6 +369,11 @@ __attribute__((constructor)) static void init(void) {
   const char *tr = getenv("FORESIGHT_ZH_TRACE");
   g_trace = tr && *tr == '1';
   logf_("foresight-zh loaded (pid %d)%s", getpid(), g_trace ? " [trace]" : "");
+  // Marker for watcher.sh: tells it this Foresight process runs with the shim.
+  char marker[700];
+  snprintf(marker, sizeof marker, "%s/Library/Logs/foresight-zh/shim.pid", g_home);
+  FILE *m = fopen(marker, "w");
+  if (m) { fprintf(m, "%d\n", getpid()); fclose(m); }
   load_config();
   patch_ascii_filter();
 }
