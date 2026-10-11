@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #include "cJSON.h"
@@ -67,6 +68,7 @@ static Conv *g_convs;
 static char g_url[512], g_model[128];
 static cJSON *g_extra;  // extra request fields from the config line
 static int g_trace_chat;
+static char g_dump_dir[700];
 
 // ---------------------------------------------------------------- handles ---
 
@@ -111,9 +113,71 @@ static void unref(Conv *c) {
 
 // ------------------------------------------------------------- conversion ---
 
+static int is_cjk(unsigned c) {
+  return (c >= 0x2E80 && c <= 0x9FFF) || (c >= 0xAC00 && c <= 0xD7AF) || (c >= 0xF900 && c <= 0xFAFF) ||
+         (c >= 0xFF00 && c <= 0xFFEF) || (c >= 0x20000 && c <= 0x3FFFF);
+}
+
+// Decodes one UTF-8 code point and returns its byte length.
+static int utf8_dec(const unsigned char *s, unsigned *c) {
+  int n = s[0] < 0x80 ? 1 : s[0] < 0xE0 ? 2 : s[0] < 0xF0 ? 3 : 4;
+  unsigned v = n == 1 ? s[0] : s[0] & (0xFF >> (n + 1));
+  for (int i = 1; i < n; i++) {
+    if (!s[i]) return i;
+    v = (v << 6) | (s[i] & 0x3F);
+  }
+  *c = v;
+  return n;
+}
+
+// The shim spaces Chinese transcripts with U+200A for Foresight's word counts,
+// and Foresight turns those into plain spaces when it builds chat context. Drop
+// every hair space, and any plain space between two CJK characters.
+static char *unspace_cjk(char *s) {
+  unsigned char *r = (unsigned char *)s, *w = r;
+  unsigned prev = 0;
+  while (*r) {
+    unsigned c = 0;
+    int n = utf8_dec(r, &c);
+    if (c == 0x200A) {
+      r += n;
+      continue;
+    }
+    if (c == ' ' && is_cjk(prev)) {
+      unsigned char *q = r;
+      while (*q == ' ') q++;
+      unsigned next = 0;
+      if (*q) utf8_dec(q, &next);
+      if ((unsigned char)q[0] == 0xE2 && q[1] == 0x80 && q[2] == 0x8A) next = prev;  // more hair spaces
+      if (is_cjk(next)) {
+        r = q;
+        continue;
+      }
+    }
+    memmove(w, r, n);
+    w += n;
+    r += n;
+    prev = c;
+  }
+  *w = 0;
+  return s;
+}
+
+// Share of CJK characters among letters.
+static double cjk_share(const char *s) {
+  long cjk = 0, letters = 0;
+  for (const unsigned char *p = (const unsigned char *)s; *p;) {
+    unsigned c = 0;
+    p += utf8_dec(p, &c);
+    if (is_cjk(c)) cjk++, letters++;
+    else if ((c | 0x20) >= 'a' && (c | 0x20) <= 'z') letters++;
+  }
+  return letters ? (double)cjk / letters : 0;
+}
+
 // Joins the text parts of a LiteRT-LM message's content (string or part array).
 static char *content_text(const cJSON *content) {
-  if (cJSON_IsString(content)) return strdup(content->valuestring);
+  if (cJSON_IsString(content)) return unspace_cjk(strdup(content->valuestring));
   size_t cap = 256, len = 0;
   char *s = malloc(cap);
   s[0] = 0;
@@ -127,7 +191,7 @@ static char *content_text(const cJSON *content) {
     memcpy(s + len, t->valuestring, n + 1);
     len += n;
   }
-  return s;
+  return unspace_cjk(s);
 }
 
 // Foresight stores earlier assistant replies as the JSON string {"text":"..."}.
@@ -352,6 +416,43 @@ static size_t on_data(void *p, size_t s, size_t n, void *u) {
   return len;
 }
 
+// Foresight's meeting brief / notes prompts are English, so the model answers in
+// English even for a Chinese transcript. Ask for the transcript's language,
+// keeping the template headings the app expects.
+static void match_transcript_language(cJSON *msgs) {
+  const cJSON *last = NULL, *m;
+  cJSON_ArrayForEach(m, msgs) {
+    const cJSON *role = cJSON_GetObjectItemCaseSensitive(m, "role");
+    if (cJSON_IsString(role) && strcmp(role->valuestring, "user") == 0) last = m;
+  }
+  const cJSON *content = cJSON_GetObjectItemCaseSensitive(last, "content");
+  if (!cJSON_IsString(content)) return;
+  const char *t = content->valuestring;
+  if (!strstr(t, "<meeting_transcript>") && !strstr(t, "<transcript_chunk>") && !strstr(t, "<new_transcript_section>"))
+    return;
+  if (cjk_share(t) < 0.3) return;
+  static const char note[] =
+      "\n\nLanguage: the transcript is in Chinese. Write all of your output in Simplified Chinese. "
+      "Keep the template's markdown headings (such as \"# Overview\" and \"# Details\") and any "
+      "required JSON keys or field names exactly as specified, in English.";
+  cJSON *first = cJSON_GetArrayItem(msgs, 0);
+  const cJSON *role = cJSON_GetObjectItemCaseSensitive(first, "role");
+  const cJSON *sys = cJSON_GetObjectItemCaseSensitive(first, "content");
+  if (cJSON_IsString(role) && strcmp(role->valuestring, "system") == 0 && cJSON_IsString(sys)) {
+    size_t n = strlen(sys->valuestring) + sizeof note;
+    char *merged = malloc(n);
+    snprintf(merged, n, "%s%s", sys->valuestring, note);
+    cJSON_ReplaceItemInObjectCaseSensitive(first, "content", cJSON_CreateString(merged));
+    free(merged);
+  } else {
+    cJSON *o = cJSON_CreateObject();
+    cJSON_AddStringToObject(o, "role", "system");
+    cJSON_AddStringToObject(o, "content", note + 2);
+    cJSON_InsertItemInArray(msgs, 0, o);
+  }
+  logf_("chat: Chinese transcript -> asking for Chinese output");
+}
+
 // Runs one request against the server, appending the reply to the history.
 static void run_request(Req *r) {
   struct timespec t0, t1;
@@ -360,7 +461,9 @@ static void run_request(Req *r) {
   cJSON *body = cJSON_CreateObject();
   if (g_model[0]) cJSON_AddStringToObject(body, "model", g_model);
   pthread_mutex_lock(&c->mu);
-  cJSON_AddItemToObject(body, "messages", cJSON_Duplicate(c->messages, 1));
+  cJSON *msgs = cJSON_Duplicate(c->messages, 1);
+  cJSON_AddItemToObject(body, "messages", msgs);
+  match_transcript_language(msgs);
   if (c->tools) cJSON_AddItemToObject(body, "tools", cJSON_Duplicate(c->tools, 1));
   int nmsg = cJSON_GetArraySize(c->messages);
   pthread_mutex_unlock(&c->mu);
@@ -373,6 +476,16 @@ static void run_request(Req *r) {
   }
   char *json = cJSON_PrintUnformatted(body);
   cJSON_Delete(body);
+  if (g_trace_chat && g_dump_dir[0]) {
+    static int seq;
+    char p[800];
+    snprintf(p, sizeof p, "%s/chat-%04d.json", g_dump_dir, __sync_add_and_fetch(&seq, 1));
+    FILE *f = fopen(p, "w");
+    if (f) {
+      fputs(json, f);
+      fclose(f);
+    }
+  }
 
   pthread_once(&g_curl_once, curl_init);
   char url[600];
@@ -574,6 +687,8 @@ static char *my_send(void *conv, const char *msg) {
 
 void chat_bridge_init(const char *home, int trace) {
   g_trace_chat = trace;
+  snprintf(g_dump_dir, sizeof g_dump_dir, "%s/Library/Logs/foresight-zh/lm", home);
+  if (trace) mkdir(g_dump_dir, 0755);
   snprintf(g_url, sizeof g_url, "http://127.0.0.1:8096/v1");
   snprintf(g_model, sizeof g_model, "qwen3.8-27b-mtp");
   char p[1024], line[1200] = "";

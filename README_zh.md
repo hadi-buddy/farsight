@@ -64,7 +64,7 @@ Foresight 的实时转写由 Google 闭源的 ODML 转写库完成。Dart 界面
 
 `shim/libforesight_zh.dylib` 通过 `DYLD_INSERT_LIBRARIES` 注入。应用的 entitlements 允许这样做
 （`allow-dyld-environment-variables`、`disable-library-validation`），因此 Google 的代码签名和
-钥匙串访问都不受影响。shim 做两件事：
+钥匙串访问都不受影响。在转写方面，shim 做三件事：
 
 1. **替换语音识别。** 拦截 `dlsym`（Dart FFI 用它查找 C API），接管
    `OdmlSpeechProcessorTranscribe` 和 `OdmlSpeechProcessorFinishStream`。Foresight 传入的音频
@@ -75,6 +75,11 @@ Foresight 的实时转写由 Google 闭源的 ODML 转写库完成。Dart 界面
 2. **去掉 ASCII 过滤。** Dart 层会用正则 `[^\x20-\x7E\n\r]` 删掉转写文本中所有非可打印 ASCII
    字符，中文因此被全部删除。shim 在内存中（写时复制页面，磁盘上的程序不变）把这个正则常量
    改成 `[\x00-\x08\x7F]+`。
+
+3. **为 Foresight 的词数统计给中文加空格。** Foresight 按空格分隔的"词"来衡量转写长度：
+   聊天检索用的实时转写片段、以及会议摘要按钮，都要达到一定词数才会出现。没有空格的中文
+   因此看起来几乎是空的：没有摘要按钮，聊天里也没有会议内容。shim 在每个中日韩字符的边界
+   插入一个极细空格（U+200A，几乎看不见），聊天转接层在把文字交给模型前再去掉。
 
 如果 SenseVoice 文件缺失或加载失败，shim 会退回 Foresight 自带的引擎（英文）。
 
@@ -118,12 +123,18 @@ echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"no
 - 用 Foresight 的实际问题测试（M5 Max）：Splash 上的 Qwen3.8-27B 约每秒 212 字符，llama.cpp
   约 91。Qwen3.8-Flash-Next（MTPLX）速度相近，但有一题忽略了检索到的笔记，转而调用日历工具。
 
+- 会议摘要也走同一个转接层。Foresight 的摘要提示词是英文的，所以转写以中文为主时，转接层会
+  要求模型用简体中文输出，并保留模板标题（`# Overview`、`# Details`）。
+- 限制：会议进行中，Foresight 用你的问题去检索转写片段，所以请用会议的语言提问（英文问题匹配
+  不到中文片段）。加空格功能之前录的会议，转写没有空格，仍然没有摘要按钮。
+
 原理：Foresight 的聊天通过 LiteRT-LM 的对话 C API 传递 JSON 消息
 （`litert_lm_create_conversation_v2`、`litert_lm_conversation_send_message_stream` 等）。shim
 用同样的 `dlsym` 拦截接管这些函数，把对话（系统提示词、笔记上下文、历史、`search_calendar`
 工具）转换成 OpenAI 聊天请求，按 Foresight 的格式流式返回回复，并把工具调用转换成 Foresight
 的工具调用消息。引擎的其他用途（摘要、音频、图片）仍由 Gemma 处理。`FORESIGHT_ZH_TRACE=1`
-会记录其余的 `litert_lm_*` 调用，并把 JSON 参数保存到 `~/Library/Logs/foresight-zh/lm/`。
+会记录所有 `dlsym` 查找和其余的 `litert_lm_*` 调用，并把 JSON 参数和转接层发出的请求保存到
+`~/Library/Logs/foresight-zh/lm/`。
 `shim/test/chat_harness.c` 可以把保存的对话重新跑一遍。
 
 ## Foresight 更新之后
