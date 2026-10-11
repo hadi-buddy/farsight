@@ -1,0 +1,37 @@
+[system_metadata]
+entries = [
+  { key = "author", value_type = "String", value = "local zh-asr swap test" },
+]
+[[section]]
+section_type = "LlmMetadata"
+data_path = "LlmMetadataProto.pbtext"
+[[section]]
+section_type = "SP_Tokenizer"
+data_path = "Section1_SP_Tokenizer.spiece"
+[[section]]
+model_type = "embedder"
+section_type = "TFLiteModel"
+data_path = "Section2_TFLiteModel_tf_lite_embedder.tflite"
+[[section]]
+model_type = "per_layer_embedder"
+section_type = "TFLiteModel"
+data_path = "Section3_TFLiteModel_tf_lite_per_layer_embedder.tflite"
+[[section]]
+model_type = "audio_encoder_hw"
+section_type = "TFLiteModel"
+data_path = "Section4_TFLiteModel_tf_lite_audio_encoder_hw.tflite"
+[[section]]
+model_type = "audio_adapter"
+section_type = "TFLiteModel"
+data_path = "Section5_TFLiteModel_tf_lite_audio_adapter.tflite"
+[[section]]
+model_type = "end_of_audio"
+section_type = "TFLiteModel"
+data_path = "Section6_TFLiteModel_tf_lite_end_of_audio.tflite"
+[[section]]
+additional_metadata = [
+  { key = "prefer_activation_type", value_type = "String", value = "fp16" },
+]
+model_type = "prefill_decode"
+section_type = "TFLiteModel"
+data_path = "Section10_TFLiteModel_tf_lite_prefill_decode.tflite"

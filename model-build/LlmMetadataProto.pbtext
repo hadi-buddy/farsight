@@ -1,0 +1,45 @@
+start_token {
+  token_ids {
+    ids: 2
+  }
+}
+stop_tokens {
+  token_ids {
+    ids: 1
+  }
+}
+stop_tokens {
+  token_ids {
+    ids: 50
+  }
+}
+stop_tokens {
+  token_ids {
+    ids: 106
+  }
+}
+llm_model_type {
+  gemma4 {
+    start_of_image_token {
+      token_str: "<|image>"
+    }
+    end_of_image_token {
+      token_str: "<image|>"
+    }
+    start_of_audio_token {
+      token_str: "<|audio>"
+    }
+    end_of_audio_token {
+      token_str: "<audio|>"
+    }
+    code_fence_start: "<|tool_call>"
+    code_fence_end: "<tool_call|>"
+    open_quote: "<|\"|>"
+    close_quote: "<|\"|>"
+    function_response_start: "<|tool_response>"
+    patch_width: 16
+    patch_height: 16
+    max_num_patches: 2520
+  }
+}
+jinja_prompt_template: "{{ bos_token }}<|turn>user\n{%- for message in messages -%}{%- if message['content'] is not string -%}{%- for item in message['content'] -%}{%- if item['type'] == 'audio' -%}<|audio|>{%- endif -%}{%- endfor -%}{%- endif -%}{%- endfor -%}Transcribe this speech verbatim in the language it is spoken. Write Mandarin in Simplified Chinese characters and keep English words in English. Output only the transcript.<turn|>\n<|turn>model\n"
