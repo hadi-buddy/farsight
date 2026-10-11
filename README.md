@@ -114,7 +114,7 @@ Splash server for Qwen3.8-27B in `~/local-llm`:
 
 ```bash
 ~/local-llm/runtime/bin/splash-serve start qwen38-27b-splash
-echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"none"}' > ~/tools/foresight-zh/chat
+echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"none","temperature":0.7,"top_p":0.8,"top_k":20}' > ~/tools/foresight-zh/chat
 ```
 
 The `chat` file is one line: `<base_url> [model] [{extra request fields}]`, or `off`. Without
@@ -124,8 +124,11 @@ Foresight after editing it.
 - The shim never starts the server: in `~/local-llm` only one model server runs at a time,
   and starting one evicts the others. When the server is down, or a different model is on
   the port, chat uses Gemma. The check is repeated every 5 seconds.
-- Sampling is left to the server, whose settings match the model's template mode. Replies
-  are capped at 2048 tokens, because llama.cpp keeps generating after a cancel.
+- Foresight's own sampling (temperature 0.4, top_k 40, tuned for Gemma) is not forwarded.
+  The llama.cpp profile applies Qwen's non-thinking settings itself. Splash has no server
+  defaults, so the `chat` line above sends them: thinking off plus temperature 0.7, top_p
+  0.8, top_k 20. Splash rejects `presence_penalty`, the fourth setting Qwen recommends.
+- Replies are capped at 2048 tokens, because llama.cpp keeps generating after a cancel.
 - Measured on Foresight queries (M5 Max): Qwen3.8-27B on Splash wrote ~212 chars/s,
   against ~91 on llama.cpp. Qwen3.8-Flash-Next (MTPLX) was as fast but ignored retrieved
   notes on one query and called the calendar tool instead.
