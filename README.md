@@ -1,214 +1,98 @@
-# foresight-zh
+# Farsight — Persian (Farsi) Speech-to-Text for Google AI Edge Foresight on macOS
 
 **English** · [فارسی](README_fa.md)
 
-Chinese (and mixed Chinese/English) or Persian transcription for Google AI Edge Foresight on
-macOS, without modifying the app. Optionally, Foresight's chat runs on a bigger local model
-(Qwen3.8-27B) instead of the built-in Gemma 4 E2B.
+> **تبدیل گفتار به متن فارسی، آفلاین و روی مک** — رونویسی زنده‌ی جلسه‌ها به فارسی در Google AI Edge Foresight.
 
-Unofficial and not affiliated with Google. No Google code or model weights are included.
+Farsight adds **live Persian transcription** to [Google AI Edge Foresight](https://ai.google.dev/edge), Google's on-device meeting-notes app for macOS. Foresight ships with an English-only speech model; Farsight swaps in an open Persian model at runtime, so meetings, calls and voice notes in Farsi are transcribed **fully offline, on your Mac**, with no change to the app itself.
 
-## Use
+- 🎙️ **Persian ASR, on-device** — [Shenava Rizeh](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx), a Persian FastConformer model, running on the CPU through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Audio never leaves the machine.
+- 🔢 **Numbers as digits** — spoken numbers become Persian digits: «هزار و چهارصد و سه» → «۱۴۰۳».
+- 📝 **Persian meeting summaries** — when chat is routed to a local model, summaries of Persian meetings come back in Persian.
+- 🧩 **No patched app** — Foresight's files and Google's code signature stay untouched; launching Foresight normally still gives you the stock English app.
 
-- Launch **`~/Applications/Foresight 中文.app`** (or run `~/tools/foresight-zh/launch.sh`).
-  It quits a running Foresight and relaunches it with the shim.
-- Launching Foresight any other way (Dock, Spotlight, login item, a notification) starts it
-  *without* the shim: it still works, but transcribes English only. The optional watcher
-  below fixes that automatically.
-- Text appears once per spoken phrase, after each pause, rather than word by word.
-- Log: `~/Library/Logs/foresight-zh/shim.log`. Debug run that also logs every transcript
-  result: `FORESIGHT_ZH_TRACE=1 ~/tools/foresight-zh/launch.sh`.
+> Unofficial. Not affiliated with or endorsed by Google. Contains no Google code or model weights.
 
-- Chat goes to the local Qwen server when it is running and to Foresight's own Gemma
-  when it is not (see "Chat on a local model" below).
+## Requirements
 
-## Setup
+- macOS on Apple Silicon
+- Google AI Edge Foresight, opened once with its model downloads finished
+- Xcode Command Line Tools (`xcode-select --install`)
+- About 150 MB of disk space for the Persian engine
 
-The shim and launcher expect this repo at `~/tools/foresight-zh`.
+## Install
 
-1. Install Foresight and open it once.
-2. Download the transcription engine, about 270MB: the
-   [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) C library,
-   SenseVoice-Small (int8) and Silero VAD. They go to `~/local-llm/models/special/foresight-zh/`.
+```bash
+git clone https://github.com/hadi-buddy/farsight.git ~/tools/farsight
+cd ~/tools/farsight
+./setup-persian.sh     # sherpa-onnx + Shenava Rizeh + Silero VAD → ~/Library/Application Support/farsight
+shim/build.sh          # builds shim/libfarsight.dylib
+./launch.sh            # restarts Foresight with Persian transcription
+```
 
-   ```bash
-   ./setup-sensevoice.sh
-   ```
+The repo must live at `~/tools/farsight`: the shim reads its settings from there.
 
-   For Persian instead, run `./setup-persian.sh` (about 150MB). It downloads
-   [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx)
-   (Persian FastConformer CTC, Apache-2.0). In this fork Persian is the default engine;
-   `echo sensevoice > ~/tools/foresight-zh/engine` switches back. See "Persian" below.
+Optional extras:
 
-3. Build the shim:
+```bash
+# A Dock / Spotlight launcher
+osacompile -o ~/Applications/Farsight.app -e 'do shell script "$HOME/tools/farsight/launch.sh"'
 
-   ```bash
-   shim/build.sh
-   ```
+# Auto-relaunch: if Foresight starts without Farsight (Dock, login item, update), restart it with Farsight
+./install-watcher.sh                 # remove with: ./install-watcher.sh --uninstall
+```
 
-4. Optional, make a Dock/Spotlight launcher:
+## Check that it works
 
-   ```bash
-   osacompile -o ~/Applications/"Foresight 中文.app" -e 'do shell script "$HOME/tools/foresight-zh/launch.sh"'
-   ```
+```bash
+grep -E "config:|asr" ~/Library/Logs/farsight/shim.log | tail
+```
 
-5. Optional, install the auto-relaunch watcher. This LaunchAgent checks every 5 seconds,
-   and if Foresight is running without the shim, relaunches it through `launch.sh`. That
-   covers plain launches from the Dock, notifications, login items and updates. The restart
-   happens a few seconds after a plain launch, so avoid starting a recording in that
-   window. It relaunches at most 3 times in 5 minutes.
+You should see `config: engine=persian` and `asr (persian): ready`. Start a recording and speak Persian; text appears phrase by phrase, after each pause.
 
-   ```bash
-   ./install-watcher.sh              # install and start
-   ./install-watcher.sh --uninstall  # remove
-   touch ~/Library/Logs/foresight-zh/watcher.paused   # pause (rm the file to resume)
-   ```
+To log every transcript for debugging: `FARSIGHT_TRACE=1 ./launch.sh`.
 
-   Log: `~/Library/Logs/foresight-zh/watcher.log`.
+## Limitations
+
+- **Persian only.** English words inside Persian speech come out as Persian-script approximations. For an English meeting, open Foresight normally (without `launch.sh`).
+- **Left-to-right layout.** Letters join correctly, but Foresight aligns lines to the left and mixed Persian/English text can look out of order. The layout lives inside the compiled app.
+- **Phrase by phrase.** Text arrives after each pause (about 0.6 s of silence), not word by word.
+- **Foresight updates** can move what the shim relies on. If Persian text disappears after an update, check `shim.log`; without Farsight the app keeps working in English.
 
 ## How it works
 
-Foresight's live transcription runs through Google's closed ODML transcription library. The
-Dart UI calls it through an exported C API (`OdmlCreateInferenceEngine`,
-`OdmlCreateSpeechPipelineFromProto`, `OdmlSpeechProcessorTranscribe`,
-`OdmlSpeechProcessorFinishStream`, ...). Its model (`models/3`) is English-only.
+Foresight is a Flutter app. Its Dart code reaches Google's transcription library through a C API (`OdmlSpeechProcessorTranscribe`, `OdmlSpeechProcessorFinishStream`, …) resolved at runtime with `dlsym`. The app's entitlements allow `DYLD_INSERT_LIBRARIES`, so `launch.sh` starts it with `shim/libfarsight.dylib` loaded first.
 
-`shim/libforesight_zh.dylib` is injected with `DYLD_INSERT_LIBRARIES`. The app's
-entitlements allow that (`allow-dyld-environment-variables`, `disable-library-validation`),
-so Google's code signature and keychain access are untouched. The shim does three things for transcription:
+1. **Speech recognition is replaced.** The shim interposes `dlsym` and wraps the transcription calls. The audio Foresight hands over (48 kHz float, one stream for the microphone and one for system audio) is resampled to 16 kHz, cut into phrases with Silero VAD, and each phrase is transcribed by Shenava Rizeh. Results go back in Foresight's own result format, so the app cannot tell the difference. See `shim/sensevoice_engine.c`.
+2. **The ASCII filter is lifted.** Foresight's Dart layer deletes every character outside printable ASCII from transcripts, which would erase all Persian. The shim rewrites that regular expression in memory (copy-on-write; the file on disk is unchanged) so only control characters are removed.
+3. **Numbers are normalized.** Shenava spells numbers out; `shim/persian_itn.c` turns well-formed spoken numbers into Persian digits. A lone «یک» stays a word, since it usually means "a". Tests: `shim/test/itn_test.sh`.
 
-1. **Replaces speech recognition.** It interposes `dlsym`, which Dart FFI uses to find the C
-   API, and wraps `OdmlSpeechProcessorTranscribe` and `OdmlSpeechProcessorFinishStream`.
-   The audio Foresight passes in (48kHz float, one stream for the mic and one for system
-   audio) is resampled to 16kHz and split into phrases with Silero VAD. Each phrase is
-   transcribed with SenseVoice-Small on the CPU, typically in 15–85ms. The text goes back in
-   Foresight's own result format (`text`, `is_final`, start/end in microseconds).
-   Foresight's English engine still loads but never runs. See `shim/sensevoice_engine.c`.
-2. **Removes the ASCII filter.** The Dart layer strips everything outside printable ASCII
-   from transcripts (`[^\x20-\x7E\n\r]`), which deletes all Chinese. The shim patches that
-   regex constant in memory (copy-on-write page; the binary on disk is unchanged) to
-   `[\x00-\x08\x7F]+`.
+If the Persian model is missing or fails to load, the shim falls back to SenseVoice (if installed) and then to Foresight's own English engine.
 
-3. **Spaces Chinese for Foresight's word counts.** Foresight measures transcripts in
-   space-separated words. It builds the live transcript chunks that chat searches, and offers
-   the meeting summary, only past a word threshold, so unspaced Chinese looked nearly empty:
-   no summary button and no meeting context in chat. The shim puts a hair space (U+200A,
-   near-invisible) at every boundary next to a CJK character. The chat bridge removes them
-   again before text reaches the model.
+## Advanced: chat and summaries on a local model
 
-If the SenseVoice files are missing or fail to load, the shim falls back to Foresight's own
-engine (English).
+Foresight's chat and meeting summaries normally run on its built-in Gemma model, which answers in English. The shim can route them to any local OpenAI-compatible server (llama.cpp, LM Studio, Ollama's OpenAI endpoint, …). Put one line in `~/tools/farsight/chat`:
 
-### Persian
-
-The default engine in this fork (`persian`, or `fa`) makes the shim transcribe each phrase
-with Shenava Rizeh instead of SenseVoice, through the same sherpa-onnx library, VAD and
-result path. Differences from the Chinese engine:
-
-- The model is Persian-only. English words inside Persian speech come out as Persian-script
-  approximations, and English-only audio is not transcribed well. Switch the engine back for
-  English or Chinese meetings.
-- Shenava spells numbers out. `shim/persian_itn.c` rewrites well-formed spoken numbers as
-  Persian digits (`بیست و پنج` → `۲۵`, `هزار و چهارصد و سه` → `۱۴۰۳`). A lone `یک` stays a
-  word, since it is usually the article "a". Tests: `shim/test/itn_test.sh`.
-- The model reads un-normalized log-mel features; its ONNX metadata tells sherpa-onnx to skip
-  NeMo's per-feature normalization. Do not override the feature config.
-- Persian is space-separated, so the CJK hair-space step does nothing to it.
-- Summaries through the chat bridge: for a mostly Arabic-script transcript the bridge asks for
-  Persian output, keeping the template headings.
-- Foresight's UI lays text out left-to-right. Letters join correctly, but lines stay
-  left-aligned and mixed Persian/English runs can look out of order.
-
-If the Persian model is missing, the shim logs it and falls back to SenseVoice, then to
-Foresight's own English engine.
-
-### Alternative engine: Gemma 4 E2B
-
-Before SenseVoice, the shim ran Foresight's own pipeline on a repack of the Gemma 4 E2B
-model that Foresight downloads. That approach redirects the model path and rewrites the
-pipeline options for batch decoding with a transcription prompt. It works, but needs a 3.4GB
-copy of Gemma and more memory. To use it:
-
-```bash
-uv venv ~/local-llm/venvs/litert --python 3.12
-uv pip install -p ~/local-llm/venvs/litert/bin/python litert-lm-api litert-lm
-model-build/build.sh                       # repacks models/15 into the ASR bundle
-echo gemma > ~/tools/foresight-zh/engine   # switch engines; delete the file to go back
+```
+<base_url> [model] [{extra JSON request fields}]
 ```
 
-`model-build/build.sh` drops the vision and drafter sections and the CPU-only tag on the
-audio sections, because Foresight runs speech on the GPU. It also swaps in a
-transcription-only template. `make_override.py` generates `pipeline_override.pb`, the options
-substituted in Gemma mode.
-
-## Chat on a local model
-
-Foresight's chat (questions about your notes and calendar) runs Gemma 4 E2B on-device. The
-shim can send it to a local OpenAI-compatible server instead. The default target is the
-Splash server for Qwen3.8-27B in `~/local-llm`:
-
-```bash
-~/local-llm/runtime/bin/splash-serve start qwen38-27b-splash
-echo 'http://127.0.0.1:8000/v1 incoai/Qwen3.8-27B-Splash {"reasoning_effort":"none","temperature":0.7,"top_p":0.8,"top_k":20}' > ~/tools/foresight-zh/chat
-```
-
-The `chat` file is one line: `<base_url> [model] [{extra request fields}]`, or `off`. Without
-the file the shim uses `http://127.0.0.1:8096/v1 qwen3.8-27b-mtp` (llama.cpp). Relaunch
-Foresight after editing it.
-
-- The shim never starts the server: in `~/local-llm` only one model server runs at a time,
-  and starting one evicts the others. When the server is down, or a different model is on
-  the port, chat uses Gemma. The check is repeated every 5 seconds.
-- Foresight's own sampling (temperature 0.4, top_k 40, tuned for Gemma) is not forwarded.
-  The llama.cpp profile applies Qwen's non-thinking settings itself. Splash has no server
-  defaults, so the `chat` line above sends them: thinking off plus temperature 0.7, top_p
-  0.8, top_k 20. Splash rejects `presence_penalty`, the fourth setting Qwen recommends.
-- Replies are capped at 2048 tokens, because llama.cpp keeps generating after a cancel.
-- Measured on Foresight queries (M5 Max): Qwen3.8-27B on Splash wrote ~212 chars/s,
-  against ~91 on llama.cpp. Qwen3.8-Flash-Next (MTPLX) was as fast but ignored retrieved
-  notes on one query and called the calendar tool instead.
-
-- Meeting summaries are generated through the same bridge. Foresight's summary prompts are
-  English, so for a mostly-Chinese transcript the bridge asks for Simplified Chinese output,
-  keeping the template headings (`# Overview`, `# Details`).
-- Limits: during a meeting, Foresight finds transcript passages by searching with your
-  question, so ask in the meeting's language (English questions do not match Chinese
-  passages). Meetings recorded before the spacing change keep unspaced transcripts and get
-  no summary button.
-
-How it works: Foresight's chat uses LiteRT-LM's conversation C API with JSON messages
-(`litert_lm_create_conversation_v2`, `litert_lm_conversation_send_message_stream`, ...).
-The shim wraps those through the same `dlsym` interposition, converts the conversation
-(system prompt, notes context, history, the `search_calendar` tool) to an OpenAI chat
-request, streams the reply back in Foresight's chunk format, and turns tool calls into
-Foresight's tool-call messages. Other uses of the engine (summaries, audio, images) still
-run on Gemma. `FORESIGHT_ZH_TRACE=1` logs every `dlsym` lookup and every other `litert_lm_*` call, and
-saves their JSON arguments and the bridge's requests to `~/Library/Logs/foresight-zh/lm/`. `shim/test/chat_harness.c` replays
-saved conversations through the bridge.
-
-## When Foresight updates
-
-The shim checks before acting and logs what it skipped:
-
-- **Filter regex not found:** the patch is skipped and Chinese may get stripped again. Find
-  the new filter string and update `patch_ascii_filter` in `shim/foresight_zh.c`.
-- **Chat C API changed:** check `shim.log` for `chat:` lines, set `chat` to `off`, and
-  re-trace with `FORESIGHT_ZH_TRACE=1`.
-- **Speech C API changed:** the wrappers depend on the current argument layout and result
-  struct. Check `shim.log`. Without the shim, the app is unaffected.
+or `off` to disable it, then relaunch. When a transcript is mostly Persian, the bridge asks the model to write the summary in Persian while keeping Foresight's template headings. If the server is down, chat falls back to Gemma. See `shim/chat_bridge.c`.
 
 ## Files
 
-- `shim/foresight_zh.c`: dlsym interposition, ODML hooks, filter patch, engine selection
-- `shim/sensevoice_engine.c`: VAD + SenseVoice or Shenava (Persian) engine via sherpa-onnx (loaded with `dlopen`)
-- `shim/persian_itn.c`: spoken Persian numbers to digits; `shim/test/itn_test.sh` tests it
-- `shim/chat_bridge.c`: chat on a local OpenAI-compatible server (libcurl)
-- `shim/cJSON.c`, `shim/cJSON.h`: [cJSON](https://github.com/DaveGamble/cJSON) v1.7.18 (MIT)
-- `shim/test/chat_harness.c`: replays saved Foresight conversations through the chat bridge
-- `shim/sherpa-onnx-c-api.h`: sherpa-onnx C API header (v1.13.8, Apache-2.0, Xiaomi Corporation)
-- `shim/test/sv_harness.c`: feeds a raw 48kHz float32 capture through the engine
-- `setup-sensevoice.sh`, `setup-persian.sh`: download the engines; `shim/build.sh`: builds the shim
-- `launch.sh`: launcher; `~/Applications/Foresight 中文.app` wraps it
-- `watcher.sh`, `install-watcher.sh`: auto-relaunch LaunchAgent (detects the shim through
-  `~/Library/Logs/foresight-zh/shim.pid`)
-- `model-build/`, `make_override.py`, `pipeline_override.pb`: the Gemma alternative
+| Path | Purpose |
+| --- | --- |
+| `shim/farsight.c` | `dlsym` interposition, transcription hooks, filter patch, engine selection |
+| `shim/sensevoice_engine.c` | VAD + speech model via sherpa-onnx (Persian or SenseVoice) |
+| `shim/persian_itn.c` | Spoken Persian numbers → digits |
+| `shim/chat_bridge.c` | Optional chat/summaries on a local server |
+| `setup-persian.sh` | Downloads the Persian engine |
+| `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |
+| `CHANGELOG.md` | What changed and why |
+
+## Credits
+
+- Built on [foresight-zh](https://github.com/michaelpersonal/foresight-zh) by michaelpersonal, which worked out the injection approach for Chinese.
+- Persian speech model: [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) by Reza2kn (Apache-2.0).
+- Inference: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), [Silero VAD](https://github.com/snakers4/silero-vad) (MIT), [cJSON](https://github.com/DaveGamble/cJSON) (MIT).

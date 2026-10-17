@@ -1,4 +1,4 @@
-// SenseVoice transcription engine for the foresight-zh shim.
+// SenseVoice transcription engine for the farsight shim.
 //
 // Replaces Foresight's ASR inference: the shim hands us the 48 kHz float audio
 // Foresight passes to OdmlSpeechProcessorTranscribe, we resample it to 16 kHz,
@@ -145,7 +145,7 @@ static void *load_thread(void *arg) {
 
 int sv_available(const char *home, int lang) {
   g_lang = lang;
-  snprintf(g_dir, sizeof g_dir, "%s/local-llm/models/special/foresight-zh", home);
+  snprintf(g_dir, sizeof g_dir, "%s/Library/Application Support/farsight", home);
   if (lang == SV_LANG_PERSIAN) {
     snprintf(g_model, sizeof g_model, "%s/persian/shenava-rizeh-v1.0/model.onnx", g_dir);
     snprintf(g_tokens, sizeof g_tokens, "%s/persian/shenava-rizeh-v1.0/tokens.txt", g_dir);

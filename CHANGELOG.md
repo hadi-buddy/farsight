@@ -1,7 +1,20 @@
 # Changelog
 
-Changes in the Persian fork (hadi-buddy/foresight-zh), on top of
-michaelpersonal/foresight-zh @ 8f15aea.
+Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
+
+## 2026-10-17 — Rename to Farsight; new README
+
+- **Context:** the fork should stand as its own project, findable by people searching for
+  Persian speech-to-text on macOS, instead of reading as a copy of foresight-zh.
+- **Change:**
+  - Paths: repo `~/tools/foresight-zh` → `~/tools/farsight`; logs `~/Library/Logs/farsight`;
+    models `~/Library/Application Support/farsight` (was `~/local-llm/models/special/foresight-zh`).
+  - `shim/foresight_zh.c` → `shim/farsight.c`, output `libfarsight.dylib`; env vars
+    `FORESIGHT_ZH_*` → `FARSIGHT_*`; LaunchAgent label `io.github.hadi-buddy.farsight.watcher`.
+  - `launch.sh` finds the shim next to itself instead of a hard-coded path.
+  - `README.md` and `README_fa.md` rewritten from scratch: Persian-first, install steps,
+    limitations, credits to foresight-zh and Shenava.
+- **Status:** done. GitHub repo still to be renamed to `farsight` in Settings.
 
 ## 2026-10-17 — Remove the Chinese README
 

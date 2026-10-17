@@ -1,10 +1,11 @@
-// foresight-zh: Chinese transcription shim for Google AI Edge Foresight (macOS).
+// farsight: Persian transcription shim for Google AI Edge Foresight (macOS).
+// Based on foresight-zh by michaelpersonal (github.com/michaelpersonal/foresight-zh).
 //
 // Loaded into Foresight via DYLD_INSERT_LIBRARIES (the app's entitlements allow
 // it: allow-dyld-environment-variables + disable-library-validation), so the
 // app's code signature is untouched.
 //
-// Engine "sensevoice" (~/tools/foresight-zh/engine): the shim takes over
+// Engine "sensevoice" (~/tools/farsight/engine): the shim takes over
 // OdmlSpeechProcessorTranscribe / FinishStream and transcribes the app's audio
 // itself with SenseVoice + Silero VAD (sensevoice_engine.c). Foresight's own
 // English engine still loads but is never run.
@@ -33,8 +34,8 @@
 //     We patch that string constant in memory (copy-on-write page) to a
 //     same-length pattern that only strips control characters.
 //
-// Config lives in ~/tools/foresight-zh/, logs in ~/Library/Logs/foresight-zh/.
-// Set FORESIGHT_ZH_TRACE=1 to log every ODML call and transcription result.
+// Config lives in ~/tools/farsight/, logs in ~/Library/Logs/farsight/.
+// Set FARSIGHT_TRACE=1 to log every ODML call and transcription result.
 
 #include <dlfcn.h>
 #include <mach-o/dyld.h>
@@ -67,7 +68,7 @@ void logf_(const char *fmt, ...) {
   pthread_mutex_lock(&g_mu);
   if (!g_log) {
     char dir[700], p[800];
-    snprintf(dir, sizeof dir, "%s/Library/Logs/foresight-zh", g_home);
+    snprintf(dir, sizeof dir, "%s/Library/Logs/farsight", g_home);
     mkdir(dir, 0755);
     snprintf(p, sizeof p, "%s/shim.log", dir);
     g_log = fopen(p, "a");
@@ -125,7 +126,7 @@ static void read_line_file(const char *path, char *out, size_t n) {
 
 static void load_config(void) {
   char p[1024], engine[64] = "persian";
-  snprintf(p, sizeof p, "%s/tools/foresight-zh/engine", g_home);
+  snprintf(p, sizeof p, "%s/tools/farsight/engine", g_home);
   read_line_file(p, engine, sizeof engine);
   if (strcmp(engine, "persian") == 0 || strcmp(engine, "fa") == 0) {
     if (sv_available(g_home, SV_LANG_PERSIAN)) {
@@ -147,8 +148,8 @@ static void load_config(void) {
     logf_("config: sensevoice not installed - trying gemma");
   }
   snprintf(g_asr_model, sizeof g_asr_model,
-           "%s/local-llm/models/special/foresight-zh/zh_asr_gemma4e2b_v3.litertlm", g_home);
-  snprintf(p, sizeof p, "%s/tools/foresight-zh/asr_model_path", g_home);
+           "%s/Library/Application Support/farsight/zh_asr_gemma4e2b_v3.litertlm", g_home);
+  snprintf(p, sizeof p, "%s/tools/farsight/asr_model_path", g_home);
   read_line_file(p, g_asr_model, sizeof g_asr_model);
   struct stat st;
   if (g_asr_model[0] && stat(g_asr_model, &st) != 0) {
@@ -156,7 +157,7 @@ static void load_config(void) {
     g_asr_model[0] = 0;
   }
 
-  snprintf(p, sizeof p, "%s/tools/foresight-zh/pipeline_override.pb", g_home);
+  snprintf(p, sizeof p, "%s/tools/farsight/pipeline_override.pb", g_home);
   FILE *f = fopen(p, "rb");
   if (f) {
     fseek(f, 0, SEEK_END);
@@ -432,9 +433,9 @@ static void dump_str(const char *fn, int k, u64 v) {
   if (!safe_read(v, probe, 1) || probe[0] != '{') return;
   size_t len = strnlen((const char *)v, 1 << 22);
   char p[900];
-  snprintf(p, sizeof p, "%s/Library/Logs/foresight-zh/lm", g_home);
+  snprintf(p, sizeof p, "%s/Library/Logs/farsight/lm", g_home);
   mkdir(p, 0755);
-  snprintf(p, sizeof p, "%s/Library/Logs/foresight-zh/lm/%04d-%s-arg%d.json", g_home,
+  snprintf(p, sizeof p, "%s/Library/Logs/farsight/lm/%04d-%s-arg%d.json", g_home,
            __sync_add_and_fetch(&seq, 1), fn + 10, k);
   FILE *f = fopen(p, "w");
   if (f) {
@@ -514,12 +515,12 @@ __attribute__((used)) static struct {
 __attribute__((constructor)) static void init(void) {
   const char *home = getenv("HOME");
   snprintf(g_home, sizeof g_home, "%s", home ? home : "");
-  const char *tr = getenv("FORESIGHT_ZH_TRACE");
+  const char *tr = getenv("FARSIGHT_TRACE");
   g_trace = tr && *tr == '1';
-  logf_("foresight-zh loaded (pid %d)%s", getpid(), g_trace ? " [trace]" : "");
+  logf_("farsight loaded (pid %d)%s", getpid(), g_trace ? " [trace]" : "");
   // Marker for watcher.sh: tells it this Foresight process runs with the shim.
   char marker[700];
-  snprintf(marker, sizeof marker, "%s/Library/Logs/foresight-zh/shim.pid", g_home);
+  snprintf(marker, sizeof marker, "%s/Library/Logs/farsight/shim.pid", g_home);
   FILE *m = fopen(marker, "w");
   if (m) { fprintf(m, "%d\n", getpid()); fclose(m); }
   load_config();

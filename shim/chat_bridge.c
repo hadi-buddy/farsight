@@ -1,4 +1,4 @@
-// Chat bridge for the foresight-zh shim.
+// Chat bridge for the farsight shim.
 //
 // Foresight's chat calls LiteRT-LM's conversation C API (litert_lm_*) with JSON
 // messages and runs Gemma 4 E2B. When the local OpenAI-compatible server is up
@@ -701,16 +701,16 @@ static char *my_send(void *conv, const char *msg) {
 
 void chat_bridge_init(const char *home, int trace) {
   g_trace_chat = trace;
-  snprintf(g_dump_dir, sizeof g_dump_dir, "%s/Library/Logs/foresight-zh/lm", home);
+  snprintf(g_dump_dir, sizeof g_dump_dir, "%s/Library/Logs/farsight/lm", home);
   if (trace) mkdir(g_dump_dir, 0755);
   snprintf(g_url, sizeof g_url, "http://127.0.0.1:8096/v1");
   snprintf(g_model, sizeof g_model, "qwen3.8-27b-mtp");
   char p[1024], line[1200] = "";
-  const char *env = getenv("FORESIGHT_ZH_CHAT");
+  const char *env = getenv("FARSIGHT_CHAT");
   if (env) {
     snprintf(line, sizeof line, "%s", env);
   } else {
-    snprintf(p, sizeof p, "%s/tools/foresight-zh/chat", home);
+    snprintf(p, sizeof p, "%s/tools/farsight/chat", home);
     FILE *f = fopen(p, "r");
     if (f) {
       if (fgets(line, sizeof line, f)) line[strcspn(line, "\r\n")] = 0;
