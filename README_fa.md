@@ -17,7 +17,7 @@
 
 ۲. موتور فارسی را دانلود کنید (حدود ۱۵۰ مگابایت): کتابخانه‌ی sherpa-onnx، مدل
 [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx)
-(FastConformer CTC فارسی، لایسنس Apache-2.0) و Silero VAD. این اسکریپت موتور را هم روی فارسی تنظیم می‌کند.
+(FastConformer CTC فارسی، لایسنس Apache-2.0) و Silero VAD. فارسی موتور پیش‌فرض این فورک است.
 
 </div>
 
@@ -56,7 +56,7 @@ osacompile -o ~/Applications/"Foresight فارسی.app" -e 'do shell script "$HO
 - Foresight را از لانچر بالا یا با `~/tools/foresight-zh/launch.sh` باز کنید. اگر از راه دیگری باز شود، فقط انگلیسی رونویسی می‌کند.
 - متن بعد از هر مکث، عبارت به عبارت ظاهر می‌شود، نه کلمه به کلمه.
 - لاگ: `~/Library/Logs/foresight-zh/shim.log` — باید خط `config: engine=persian` و بعد `asr (persian): ready` را ببینید.
-- برگشت به چینی/انگلیسی: فایل `~/tools/foresight-zh/engine` را پاک کنید و Foresight را دوباره با لانچر باز کنید.
+- برای جلسه‌ی انگلیسی کافی است Foresight را معمولی (بدون لانچر) باز کنید؛ موتور انگلیسی خود برنامه کار می‌کند.
 
 ## چه چیزی فرق می‌کند
 

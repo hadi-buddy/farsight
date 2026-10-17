@@ -37,8 +37,8 @@ The shim and launcher expect this repo at `~/tools/foresight-zh`.
 
    For Persian instead, run `./setup-persian.sh` (about 150MB). It downloads
    [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx)
-   (Persian FastConformer CTC, Apache-2.0) and writes `persian` to `~/tools/foresight-zh/engine`.
-   Delete that file to go back to SenseVoice. See "Persian" below.
+   (Persian FastConformer CTC, Apache-2.0). In this fork Persian is the default engine;
+   `echo sensevoice > ~/tools/foresight-zh/engine` switches back. See "Persian" below.
 
 3. Build the shim:
 
@@ -101,7 +101,7 @@ engine (English).
 
 ### Persian
 
-`echo persian > ~/tools/foresight-zh/engine` (or `fa`) makes the shim transcribe each phrase
+The default engine in this fork (`persian`, or `fa`) makes the shim transcribe each phrase
 with Shenava Rizeh instead of SenseVoice, through the same sherpa-onnx library, VAD and
 result path. Differences from the Chinese engine:
 
@@ -119,7 +119,8 @@ result path. Differences from the Chinese engine:
 - Foresight's UI lays text out left-to-right. Letters join correctly, but lines stay
   left-aligned and mixed Persian/English runs can look out of order.
 
-If the Persian model is missing, the shim logs it and falls back to SenseVoice.
+If the Persian model is missing, the shim logs it and falls back to SenseVoice, then to
+Foresight's own English engine.
 
 ### Alternative engine: Gemma 4 E2B
 
