@@ -1,5 +1,5 @@
 // Feeds a raw 48 kHz float32 capture through the engine in Foresight-sized chunks.
-// FORESIGHT_ZH_LANG=persian selects the Persian model instead of SenseVoice.
+// FARSIGHT_LANG=persian selects the Persian model instead of SenseVoice.
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,7 +13,7 @@ static double now(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t);
 
 int main(int argc, char **argv) {
   if (argc < 2) { fprintf(stderr, "usage: %s capture.f32\n", argv[0]); return 2; }
-  const char *lang = getenv("FORESIGHT_ZH_LANG");
+  const char *lang = getenv("FARSIGHT_LANG");
   int fa = lang && (strcmp(lang, "persian") == 0 || strcmp(lang, "fa") == 0);
   if (!sv_available(getenv("HOME"), fa ? SV_LANG_PERSIAN : SV_LANG_SENSEVOICE)) return 1;
   double t0 = now();
