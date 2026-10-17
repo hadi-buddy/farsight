@@ -2,7 +2,7 @@
 
 # foresight-zh — نسخه‌ی فارسی
 
-[English](README.md) · [简体中文](README_zh.md) · **فارسی**
+[English](README.md) · **فارسی**
 
 رونویسی زنده‌ی فارسی برای Google AI Edge Foresight روی macOS، بدون تغییر دادن خود برنامه.
 این شاخه روی پروژه‌ی [michaelpersonal/foresight-zh](https://github.com/michaelpersonal/foresight-zh) ساخته شده و فقط یک موتور فارسی کنار موتور چینی اضافه می‌کند.
