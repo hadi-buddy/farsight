@@ -2,6 +2,28 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Language switcher moved into Foresight's own menu bar
+
+- **Context:** the first version of the language switcher (previous entry below) was a separate,
+  standalone `NSStatusItem` app (`menubar/`) — independent of Foresight entirely. The user wanted it
+  *inside* Foresight's own menu bar instead, next to "Window", not a second icon elsewhere.
+- **Change:** removed `menubar/` and `install-menubar.sh`. Added `shim/persian_menu.m`
+  (`persian_menu_init()`, called from `farsight.c`'s constructor like `persian_font_init`): on
+  `NSApplicationDidFinishLaunchingNotification`, inserts a "زبان" top-level menu right after "Window"
+  in `NSApp.mainMenu`, with فارسی/English items (checkmark on the active one). This works because the
+  menu bar is native AppKit even though the window content is Flutter (confirmed in the previous
+  entry: `setTitle:` is a real selector in the binary, for this exact chrome) — ordinary public
+  `NSMenu`/`NSMenuItem` calls apply here, unlike the window content. Picking an item writes the choice
+  to `~/tools/farsight/lang` (same file and `launch.sh` fallback as before) and runs `launch.sh` in the
+  background; `launch.sh`'s own quit-then-relaunch logic handles closing the current Foresight (which
+  includes us) and reopening it in the right language — the menu code never calls `-terminate:` itself,
+  to avoid racing that sequence.
+  `shim/build.sh` now also compiles `persian_menu.m` and links `-framework AppKit`.
+- **Status:** written, not yet built/run (needs `clang`+AppKit on macOS). To verify: `shim/build.sh`,
+  launch Foresight, confirm "زبان" appears right after "Window", confirm both items relaunch Foresight
+  in the right language with the right item checked, confirm it doesn't duplicate itself across
+  relaunches (the `installMenu` guard checks for an existing "زبان" submenu title first).
+
 ## 2026-10-18 — Menu-bar language switcher; confirmed Foresight's UI can't be safely translated
 
 - **Context:** asked to translate Foresight's remaining English labels ("Start transcribing", "Live

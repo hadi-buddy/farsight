@@ -64,7 +64,7 @@ With `dump = 1`, every phrase is saved as a WAV file plus its transcript in `~/L
 ## Limitations
 
 - **Persian only.** English words inside Persian speech come out as Persian-script approximations. For an English meeting, open Foresight normally (without `launch.sh`).
-- **UI language.** `launch.sh` opens Foresight in Persian (right-to-left). Use `FARSIGHT_LANG=en ./launch.sh` for English or `FARSIGHT_LANG=system` to follow macOS. A few labels, such as "Start transcribing", are not translated by Google (they're drawn by Foresight's own Flutter UI, which Farsight does not — and, as of investigating it, cannot safely — modify). `menubar/build.sh` builds a small menu-bar toggle (فارسی/English) that remembers your choice and relaunches Foresight for you, so you don't need the terminal for this after the first setup; `./install-menubar.sh` starts it at login.
+- **UI language.** `launch.sh` opens Foresight in Persian (right-to-left). Use `FARSIGHT_LANG=en ./launch.sh` for English or `FARSIGHT_LANG=system` to follow macOS. A few labels, such as "Start transcribing", are not translated by Google (they're drawn by Foresight's own Flutter UI, which Farsight does not — and, as of investigating it, cannot safely — modify). Once Farsight is running, Foresight's own menu bar has a "زبان" menu (next to Window) with فارسی/English — pick one and Foresight relaunches itself in that language; no terminal needed after the first setup.
 - **Phrase by phrase.** Text arrives after each pause (about 0.6 s of silence), not word by word.
 - **Foresight updates** can move what the shim relies on. If Persian text disappears after an update, check `shim.log`; without Farsight the app keeps working in English.
 
