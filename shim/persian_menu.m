@@ -86,14 +86,21 @@ static void DeleteSavedState(void) {
   logf_("menu: DeleteSavedState: removed = %d (%s)", removed, rmErr ? rmErr.localizedDescription.UTF8String : "ok");
 }
 
-// Also stops macOS from saving state in the first place, so there's nothing
-// to restore on a launch that runs before DeleteSavedState() gets a chance
-// to (a login item, a system-triggered relaunch after a crash). Safe to call
-// from within Foresight's own process since it only affects future quits.
+// Also stops macOS from saving/restoring state in the first place, so
+// there's nothing to restore on a launch that runs before DeleteSavedState()
+// gets a chance to (a login item, a system-triggered relaunch after a crash,
+// or -- the actual bug report -- a plain reopen after the user quit normally).
+// NSQuitAlwaysKeepsWindows alone does NOT do this -- that key only controls
+// the "keep windows when quitting" prompt/behavior. The key that actually
+// disables AppKit's state-restoration machinery (both saving on quit AND
+// restoring on next launch) is ApplePersistenceIgnoreState. Safe to call
+// from within Foresight's own process since it only affects future
+// quits/launches, never the one currently running.
 static void DisableFutureStateSaving(void) {
   NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
   if (!bundleID) return;
   CFPreferencesSetAppValue(CFSTR("NSQuitAlwaysKeepsWindows"), kCFBooleanFalse, (__bridge CFStringRef)bundleID);
+  CFPreferencesSetAppValue(CFSTR("ApplePersistenceIgnoreState"), kCFBooleanTrue, (__bridge CFStringRef)bundleID);
   CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
 }
 
