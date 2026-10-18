@@ -2,6 +2,20 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Persian summary headings
+
+- **Context:** Persian summaries still had the English template headings «Overview» and «Details»,
+  which the language instruction asked the model to keep.
+- **Change:** `persian_note()` in `shim/chat_bridge.c`: for a Persian transcript the model is asked to
+  write the headings in Persian too («# مرور کلی», «# جزئیات»); JSON keys stay in English.
+  `FARSIGHT_HEADINGS=en ./launch.sh` restores the English headings. Applies to Gemma and the
+  local-server bridge.
+- **Status:** to verify on macOS that Foresight still shows the summary correctly (the app might
+  use the English headings to split sections).
+- **Not changed:** UI labels hard-coded in Foresight («Start transcribing», «Live Q&A», «Now»,
+  «Transcript», «Start new session», «Link scheduled meeting») are compiled into Google's binary and
+  absent from its Persian translation table; Farsight does not modify the app, so they stay English.
+
 ## 2026-10-18 — Echo dedup, Persian summaries from Gemma, «نه» stays a word
 
 - **Context:** a real test (a video playing through the speakers) gave every sentence twice,
