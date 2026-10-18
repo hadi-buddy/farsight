@@ -9,19 +9,26 @@
 //
 // On NSApplicationDidFinishLaunchingNotification, inserts a top-level
 // "Language" menu right after "Window", with فارسی/English items. Picking one
-// writes the choice to ~/tools/farsight/lang (the launch.sh fallback added
-// alongside this) and relaunches Foresight automatically by running
-// launch.sh in the background -- the user never has to restart it by hand.
-// launch.sh's own logic quits the running Foresight (which includes us) and
-// reopens it with the right -AppleLanguages/-AppleLocale; we never call
-// -terminate: ourselves, to avoid racing that quit-then-relaunch sequence.
+// writes the choice to ~/tools/farsight/lang (also launch.sh's own fallback,
+// for a manual `./launch.sh` later) and relaunches Foresight itself: opens a
+// *new* instance via NSWorkspace with DYLD_INSERT_LIBRARIES and
+// -AppleLanguages/-AppleLocale set directly (createsNewApplicationInstance =
+// YES -- without it, re-opening an already-running app just activates the
+// existing instance and does nothing, which looked exactly like "nothing
+// happens" when first reported), then quits this instance once the new one is
+// confirmed running. Deliberately not going through launch.sh/NSTask+zsh for
+// this: a spawned shell depends on Foresight not being sandboxed against
+// subprocess execution, and its own quit-the-old-instance step, running an
+// AppleScript against an app that is quitting itself, is a second thing that
+// can race or fail silently. NSWorkspace's app-launch API is the path Apple
+// expects even sandboxed apps to relaunch through.
 
 #import <AppKit/AppKit.h>
 
 extern void logf_(const char *fmt, ...);
 
 static char g_lang_file[700];
-static char g_launch_script[700];
+static char g_dylib_path[700];
 
 // The same Vazirmatn font persian_font.c registers process-wide (see its
 // comment), looked up directly here: AppKit's own menu-text layout may not
@@ -107,6 +114,11 @@ static NSString *CurrentLanguage(void) {
   self.enItem.state = [lang isEqualToString:@"en"] ? NSControlStateValueOn : NSControlStateValueOff;
 }
 
+static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSString *key) {
+  const char *v = getenv(key.UTF8String);
+  if (v && *v) env[key] = [NSString stringWithUTF8String:v];
+}
+
 - (void)setLanguage:(NSString *)lang {
   if ([lang isEqualToString:CurrentLanguage()]) return;
   NSError *err = nil;
@@ -119,16 +131,49 @@ static NSString *CurrentLanguage(void) {
     return;
   }
   [self refreshChecks];
-  logf_("menu: language set to %s, relaunching", lang.UTF8String);
+  [self relaunchWithLanguage:lang];
+}
 
-  NSTask *task = [[NSTask alloc] init];
-  task.executableURL = [NSURL fileURLWithPath:@"/bin/zsh"];
-  task.arguments = @[ [NSString stringWithUTF8String:g_launch_script] ];
-  @try {
-    [task launch];
-  } @catch (NSException *ex) {
-    logf_("menu: failed to launch launch.sh: %s", ex.reason.UTF8String);
+- (void)relaunchWithLanguage:(NSString *)lang {
+  NSURL *appURL = NSRunningApplication.currentApplication.bundleURL;
+  if (!appURL) {
+    logf_("menu: could not resolve Foresight's own bundle URL, cannot relaunch");
+    return;
   }
+
+  NSMutableDictionary<NSString *, NSString *> *env = [NSMutableDictionary dictionary];
+  env[@"DYLD_INSERT_LIBRARIES"] = [NSString stringWithUTF8String:g_dylib_path];
+  AddEnvIfSet(env, @"FARSIGHT_TRACE");
+  AddEnvIfSet(env, @"FARSIGHT_FONT");
+  AddEnvIfSet(env, @"FARSIGHT_HEADINGS");
+  AddEnvIfSet(env, @"FARSIGHT_GEMMA_SAMPLING");
+
+  NSMutableArray<NSString *> *args = [NSMutableArray arrayWithObject:@"-AppleLanguages"];
+  if ([lang isEqualToString:@"fa"]) {
+    [args addObjectsFromArray:@[ @"(fa)", @"-AppleLocale", @"fa_IR" ]];
+  } else {
+    [args addObject:[NSString stringWithFormat:@"(%@)", lang]];
+  }
+
+  NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
+  config.environment = env;
+  config.arguments = args;
+  config.createsNewApplicationInstance = YES;
+
+  logf_("menu: language set to %s, opening a new Foresight instance", lang.UTF8String);
+  [NSWorkspace.sharedWorkspace openApplicationAtURL:appURL
+                                       configuration:config
+                                   completionHandler:^(NSRunningApplication *app, NSError *openErr) {
+                                     if (openErr) {
+                                       logf_("menu: relaunch failed: %s", openErr.localizedDescription.UTF8String);
+                                       return;
+                                     }
+                                     logf_("menu: new Foresight instance running (pid %d), quitting this one",
+                                           app.processIdentifier);
+                                     dispatch_async(dispatch_get_main_queue(), ^{
+                                       [NSApp terminate:nil];
+                                     });
+                                   }];
 }
 
 - (void)selectFarsi:(id)sender { [self setLanguage:@"fa"]; }
@@ -140,7 +185,7 @@ static FarsightMenuController *g_controller;
 
 void persian_menu_init(const char *home) {
   snprintf(g_lang_file, sizeof g_lang_file, "%s/tools/farsight/lang", home);
-  snprintf(g_launch_script, sizeof g_launch_script, "%s/tools/farsight/launch.sh", home);
+  snprintf(g_dylib_path, sizeof g_dylib_path, "%s/tools/farsight/shim/libfarsight.dylib", home);
   g_controller = [FarsightMenuController new];
   [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidFinishLaunchingNotification
                                                      object:nil
