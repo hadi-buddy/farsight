@@ -2,6 +2,33 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Add "Reference Model" menu: pick a local model without the chat file
+
+- **Context:** `shim/chat_bridge.c` already lets `~/tools/farsight/chat` route Foresight's chat/summaries
+  to any local OpenAI-compatible server instead of its built-in Gemma, but only by hand-editing that file
+  in a terminal — not usable for a non-developer end user, the same gap the "Language" menu closed for
+  the UI language.
+- **Change:** `shim/model_menu.m` (new), wired into `farsight.c`'s constructor right after
+  `persian_menu_init`. A "Reference Model" menu next to "Language" in Foresight's own menu bar:
+  - "Foresight (Gemma)" — the app's own model, writes `off` to the chat file.
+  - Auto-detected local servers: on every menu open (`NSMenuDelegate menuNeedsUpdate:`), probes
+    `{base}/models` on Ollama (`:11434`), LM Studio (`:1234`) and a llama.cpp server (`:8080`) via async
+    `NSURLSession` (not libcurl's blocking calls, so an unreachable port never freezes the menu), lists
+    each server's installed models by name. Unreachable servers are simply left out.
+  - "Add…" — an `NSAlert` with two fields (base URL, model name) for any other server/port.
+  - If the saved config doesn't match any currently-detected model (its server isn't running right now,
+    or it was set by hand with `{extra JSON fields}` the menu doesn't offer), a "Custom: …" item is shown
+    and checked instead of silently losing the checkmark.
+  - Writes the exact same `"<base_url> [model]"` / `"off"` format `chat_bridge_init()` already reads —
+    `chat_bridge.c` itself needed no changes at all.
+  - Like the Language menu, `chat_bridge_init()` only reads that file once at process startup, so picking
+    a model relaunches Foresight the same way as Language does (`NSWorkspace` +
+    `createsNewApplicationInstance = YES`, saved-state deletion before relaunch, never `NSTask`/`launch.sh`
+    — see `persian_menu.m`'s own comments for why each of those matters, all still true here). The
+    relaunch also carries the current UI language (read from `~/tools/farsight/lang`) so switching models
+    never resets it back to Persian/English default.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-18 — The real root cause: Foresight re-execs itself, dropping all argv
 
 - **Context:** the `-n` fix (previous entry) was built, pushed, tested — still failed, with a screenshot

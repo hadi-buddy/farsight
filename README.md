@@ -80,15 +80,19 @@ Foresight is a Flutter app. Its Dart code reaches Google's transcription library
 
 If the Persian model is missing or fails to load, the shim falls back to SenseVoice (if installed) and then to Foresight's own English engine.
 
-## Advanced: chat and summaries on a local model
+## Chat and summaries on a local model
 
-Foresight's chat and meeting summaries normally run on its built-in Gemma model, which answers in English. The shim can route them to any local OpenAI-compatible server (llama.cpp, LM Studio, Ollama's OpenAI endpoint, …). Put one line in `~/tools/farsight/chat`:
+Foresight's chat and meeting summaries normally run on its built-in Gemma model, which answers in English. The shim can route them to any local OpenAI-compatible server (llama.cpp, LM Studio, Ollama's OpenAI endpoint, …).
+
+Once Farsight is running, Foresight's own menu bar has a "Reference Model" menu (next to Language) — it auto-detects any of Ollama, LM Studio or a llama.cpp server running on their usual ports and lists their installed models, plus "Add…" for any other OpenAI-compatible server/model. Picking one relaunches Foresight on it, same as the Language menu; no terminal needed.
+
+For a server on another port, or extra request fields the menu doesn't offer, put one line in `~/tools/farsight/chat` by hand instead:
 
 ```
 <base_url> [model] [{extra JSON request fields}]
 ```
 
-or `off` to disable it, then relaunch. When a transcript is mostly Persian, the bridge asks the model to write the summary in Persian while keeping Foresight's template headings. If the server is down, chat falls back to Gemma. See `shim/chat_bridge.c`.
+or `off` to disable it, then relaunch. When a transcript is mostly Persian, the bridge asks the model to write the summary in Persian while keeping Foresight's template headings. If the server is down, chat falls back to Gemma. See `shim/chat_bridge.c` and `shim/model_menu.m`.
 
 ## Files
 
@@ -101,6 +105,7 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 | `shim/persian_font.c` | Vazirmatn as the font for Persian text (CoreText fallback hook) |
 | `shim/persian_date.c` | Today's date in the Jalali (Solar Hijri) calendar, prepended to Persian summaries |
 | `shim/persian_menu.m` | "Language" menu in Foresight's own menu bar (فارسی/English, relaunches on change) |
+| `shim/model_menu.m` | "Reference Model" menu: auto-detected local servers + "Add…", relaunches on change |
 | `shim/chat_bridge.c` | Optional chat/summaries on a local server |
 | `setup-persian.sh` | Downloads the Persian engine |
 | `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |

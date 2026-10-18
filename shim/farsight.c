@@ -55,6 +55,7 @@
 #include "chat_bridge.h"
 #include "persian_font.h"
 #include "persian_menu.h"
+#include "model_menu.h"
 #include "sensevoice_engine.h"
 
 typedef uint64_t u64;
@@ -528,6 +529,7 @@ __attribute__((constructor)) static void init(void) {
   load_config();
   persian_font_init(g_home);
   persian_menu_init(g_home);
+  model_menu_init(g_home);
   chat_bridge_init(g_home, g_trace);
   patch_ascii_filter();
 }
