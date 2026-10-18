@@ -78,10 +78,19 @@ static NSString *CurrentLanguage(void) {
 // this early.
 static void SetFirebaseLocale(NSString *lang) {
   NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
-  if (!bundleID) return;
+  if (!bundleID) {
+    logf_("menu: SetFirebaseLocale(%s): NSBundle.mainBundle.bundleIdentifier is nil, cannot write",
+          lang.UTF8String);
+    return;
+  }
   CFPreferencesSetAppValue(CFSTR("com.firebase.instanceid.user_defaults.locale"), (__bridge CFStringRef)lang,
                             (__bridge CFStringRef)bundleID);
-  CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
+  Boolean ok = CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
+  CFPropertyListRef readback =
+      CFPreferencesCopyAppValue(CFSTR("com.firebase.instanceid.user_defaults.locale"), (__bridge CFStringRef)bundleID);
+  logf_("menu: SetFirebaseLocale(%s) bundle=%s sync=%d readback=%s", lang.UTF8String, bundleID.UTF8String, ok,
+        readback ? [(__bridge NSString *)readback UTF8String] : "(nil)");
+  if (readback) CFRelease(readback);
 }
 
 @interface FarsightMenuController : NSObject
