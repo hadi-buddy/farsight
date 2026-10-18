@@ -2,6 +2,15 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — First live run on macOS
+
+- **Context:** first end-to-end test on the maintainer's Mac (Apple Silicon, Foresight with Gemma 4 E4B).
+- **Result:** `config: engine=persian`, `filter patch: applied`, `asr (persian): ready`; Persian speech
+  shows up in Foresight's Transcript tab phrase by phrase, letters joined correctly.
+- **Seen in the test:** the first syllable of a phrase can be clipped by VAD («ظه ضبط» for «...ه ضبط»);
+  no zero-width non-joiner in «می شه», «طرح های».
+- **Status:** working. Next: ZWNJ/Arabic-letter normalization, VAD pre-roll.
+
 ## 2026-10-18 — Resumable downloads in setup-persian.sh
 
 - **Context:** on a slow or unstable connection the sherpa-onnx download (silent `curl | tar`)
@@ -23,7 +32,7 @@ Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
   - `launch.sh` finds the shim next to itself instead of a hard-coded path.
   - `README.md` and `README_fa.md` rewritten from scratch: Persian-first, install steps,
     limitations, credits to foresight-zh and Shenava.
-- **Status:** done. GitHub repo still to be renamed to `farsight` in Settings.
+- **Status:** done; GitHub repo renamed to `farsight`.
 
 ## 2026-10-17 — Remove the Chinese README
 
@@ -38,7 +47,7 @@ Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 - **Change:** `load_config` in `shim/foresight_zh.c` defaults to `persian` when
   `~/tools/foresight-zh/engine` is absent. `setup-persian.sh` removes that file instead of
   writing it. Fallback order: Persian → SenseVoice → Foresight's own English engine.
-- **Status:** done; not yet run on a Mac.
+- **Status:** done; verified on macOS 2026-10-18.
 
 ## 2026-10-17 — Persian transcription engine
 
@@ -52,5 +61,4 @@ Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
     digits; a lone «یک» stays a word. Tests: `shim/test/itn_test.sh` (17 cases, passing).
   - `shim/chat_bridge.c`: Arabic-script share ≥ 30% → ask the chat model for Persian output.
   - `setup-persian.sh`, `README_fa.md`, Persian section in `README.md`.
-- **Status:** syntax-checked and unit-tested on Linux; full build and live transcription
-  still to be verified on macOS (look for `asr (persian): ready` in `shim.log`).
+- **Status:** verified on macOS 2026-10-18 (see "First live run").
