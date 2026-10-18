@@ -58,27 +58,41 @@ static NSString *CurrentLanguage(void) {
   return (saved.length > 0) ? saved : @"fa";
 }
 
-// The actual root cause of "menu says فارسی, app opens in English" (found
-// after SetFirebaseLocale below was confirmed correct -- writes, syncs, and
-// reads back fa every time -- and the bug still reproduced): macOS's own
-// window/app state restoration ("Saved Application State") replays the
+// The actual root cause of "menu says فارسی, app opens in English": macOS's
+// own window/app state restoration ("Saved Application State") replays the
 // previous session's UI, language included, over whatever this launch's
 // locale actually is. Confirmed by testing: deleting
-// ~/Library/Saved Application State/<bundle-id>.savedState and relaunching
-// was the one thing that actually fixed it, with no other code change.
-// NSQuitAlwaysKeepsWindows=false additionally asks macOS not to save state
-// in the first place, so there's nothing to restore on a future launch this
-// doesn't get a chance to run before (a login item, a system-triggered
-// relaunch after a crash, etc.).
-static void DisableStateRestoration(void) {
+// ~/Library/Saved Application State/<bundle-id>.savedState *before* Foresight
+// starts, then launching, fixed it; deleting it from inside Foresight's own
+// startup code (the dylib constructor -- about as early as that process ever
+// lets us run anything) did NOT fix it, even though that already runs before
+// main(). Restoration is evidently applied by something before our
+// constructor gets a chance to run at all -- so the delete has to happen in
+// whatever process does the launching, before it launches, not in the
+// launched process itself. Called from both places that actually spawn a new
+// Foresight: launch.sh (added there too) and relaunchWithLanguage: below.
+static NSString *SavedStatePath(void) {
+  NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
+  if (!bundleID) return nil;
+  return [NSString stringWithFormat:@"%@/Library/Saved Application State/%@.savedState", NSHomeDirectory(),
+                                     bundleID];
+}
+
+static void DeleteSavedState(void) {
+  NSString *path = SavedStatePath();
+  if (!path) return;
+  NSError *rmErr = nil;
+  BOOL removed = [NSFileManager.defaultManager removeItemAtPath:path error:&rmErr];
+  logf_("menu: DeleteSavedState: removed = %d (%s)", removed, rmErr ? rmErr.localizedDescription.UTF8String : "ok");
+}
+
+// Also stops macOS from saving state in the first place, so there's nothing
+// to restore on a launch that runs before DeleteSavedState() gets a chance
+// to (a login item, a system-triggered relaunch after a crash). Safe to call
+// from within Foresight's own process since it only affects future quits.
+static void DisableFutureStateSaving(void) {
   NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
   if (!bundleID) return;
-  NSString *savedStateDir = [NSString stringWithFormat:@"%@/Library/Saved Application State/%@.savedState",
-                                                         NSHomeDirectory(), bundleID];
-  NSError *rmErr = nil;
-  BOOL removed = [NSFileManager.defaultManager removeItemAtPath:savedStateDir error:&rmErr];
-  logf_("menu: DisableStateRestoration: removed saved state = %d (%s)", removed,
-        rmErr ? rmErr.localizedDescription.UTF8String : "ok");
   CFPreferencesSetAppValue(CFSTR("NSQuitAlwaysKeepsWindows"), kCFBooleanFalse, (__bridge CFStringRef)bundleID);
   CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
 }
@@ -91,8 +105,8 @@ static void DisableStateRestoration(void) {
 // Foresight itself is evidently reading it for this. -AppleLanguages still
 // gets passed too, for anything in the process that does follow the normal
 // macOS mechanism (e.g. our own injected "Language" menu's text direction).
-// Kept alongside DisableStateRestoration() even though that one turned out
-// to be the actual fix: harmless, and whatever reads this key (confirmed:
+// Kept alongside DeleteSavedState() even though that one turned out to be
+// the actual fix: harmless, and whatever reads this key (confirmed:
 // Foresight's own Firebase init checks it and skips overwriting if already
 // present) should still see our choice, not a stale one.
 //
@@ -218,6 +232,10 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
     return;
   }
 
+  // Must happen here, in this (still-running, about-to-quit) process, before
+  // the new instance is spawned below -- see DeleteSavedState()'s comment.
+  DeleteSavedState();
+
   NSMutableDictionary<NSString *, NSString *> *env = [NSMutableDictionary dictionary];
   env[@"DYLD_INSERT_LIBRARIES"] = [NSString stringWithUTF8String:g_dylib_path];
   AddEnvIfSet(env, @"FARSIGHT_TRACE");
@@ -263,7 +281,7 @@ static FarsightMenuController *g_controller;
 void persian_menu_init(const char *home) {
   snprintf(g_lang_file, sizeof g_lang_file, "%s/tools/farsight/lang", home);
   snprintf(g_dylib_path, sizeof g_dylib_path, "%s/tools/farsight/shim/libfarsight.dylib", home);
-  DisableStateRestoration();              // the actual fix -- see its comment
+  DisableFutureStateSaving();             // stops future saves; doesn't fix *this* launch -- see its comment
   SetFirebaseLocale(CurrentLanguage());  // as early as possible -- see SetFirebaseLocale's comment
   g_controller = [FarsightMenuController new];
   [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidFinishLaunchingNotification

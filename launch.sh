@@ -26,4 +26,10 @@ case $lang in
   fa) app_args=(--args -AppleLanguages "(fa)" -AppleLocale fa_IR) ;;
   *) app_args=(--args -AppleLanguages "($lang)") ;;
 esac
+# macOS's own window/app state restoration replays the *previous* session's
+# rendered UI (language included) over whatever this launch's locale resolves
+# to -- confirmed by testing. Must happen here, before `open` starts the new
+# process: deleting it from inside Foresight's own startup code was too late
+# (restoration is evidently applied before that code gets a chance to run).
+rm -rf "$HOME/Library/Saved Application State/com.google.AIEdgeForesight.savedState"
 exec open "${env_args[@]}" -a Foresight "${app_args[@]}"
