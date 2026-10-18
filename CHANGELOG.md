@@ -2,6 +2,31 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Language menu: reliable relaunch via NSWorkspace; left-aligned items
+
+- **Context:** the NSTask+`launch.sh` relaunch (previous entry) wasn't restarting Foresight for the
+  user, with no way to tell why without a `shim.log` round-trip (several shell layers — zsh, osascript
+  quit, pkill, open — any of which could fail silently, and no evidence it was actually sandbox-safe).
+  Separately, the فارسی item's custom RTL paragraph style made it right-justified while English stayed
+  left-justified in the same dropdown — visually inconsistent.
+- **Change (`shim/persian_menu.m`):**
+  - `relaunchWithLanguage:` replaces the NSTask/launch.sh path entirely: `NSWorkspace
+    openApplicationAtURL:configuration:` on Foresight's own bundle URL
+    (`NSRunningApplication.currentApplication.bundleURL`, not a guessed path), with
+    `DYLD_INSERT_LIBRARIES` and `-AppleLanguages`/`-AppleLocale` set directly in the
+    `NSWorkspaceOpenConfiguration`, `createsNewApplicationInstance = YES`. That flag matters: without
+    it, re-opening an already-running app just activates the existing instance and does nothing — the
+    likely actual cause of "doesn't restart". Quits this instance only after the completion handler
+    confirms the new one is running, so there's no window where neither instance is up.
+  - `PersianMenuTitle()`: dropped the custom paragraph style (RTL/right-alignment), font only — فارسی
+    and English now both start from the same left edge like any other menu item.
+- **Not changed:** the RTL issue in the AI-summary *content* (bullet on the wrong side, LTR block
+  layout for Persian text) is a separate thing, reported in chat but not fixed — it's inside Flutter's
+  own text layout, the same code path confirmed unreachable in the "Jalali date" entry's investigation
+  (no `CTLine`/`CTTypesetter`/`CTFrame` hook point exists). Only this native AppKit menu, not the
+  window content, can be touched this way.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-18 — Language menu: English label, Vazirmatn+RTL for فارسی
 
 - **Change (`shim/persian_menu.m`):**
