@@ -34,17 +34,14 @@ static NSFont *VazirmatnMenuFont(void) {
   return f ?: menuFont;  // FARSIGHT_FONT=system, or fonts not installed: fall back silently
 }
 
-// RTL-correct attributed title for Persian menu text (menu items don't pick
-// up writing direction from content the way free-flowing text views do).
+// Font only, deliberately no custom alignment/writing-direction: both menu
+// items (فارسی and English) need to start from the same left edge like any
+// other NSMenuItem, not have فارسی right-justified while English stays
+// left-justified.
 static NSAttributedString *PersianMenuTitle(NSString *text) {
-  NSMutableParagraphStyle *style = [NSMutableParagraphStyle new];
-  style.baseWritingDirection = NSWritingDirectionRightToLeft;
-  style.alignment = NSTextAlignmentRight;
-  return [[NSAttributedString alloc] initWithString:text
-                                          attributes:@{
-                                            NSFontAttributeName : VazirmatnMenuFont(),
-                                            NSParagraphStyleAttributeName : style,
-                                          }];
+  return [[NSAttributedString alloc] initWithString:text attributes:@{
+    NSFontAttributeName : VazirmatnMenuFont(),
+  }];
 }
 
 static NSString *CurrentLanguage(void) {
