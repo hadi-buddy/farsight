@@ -2,6 +2,37 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — The real root cause: Foresight re-execs itself, dropping all argv
+
+- **Context:** the `-n` fix (previous entry) was built, pushed, tested — still failed, with a screenshot
+  confirming فارسی checked in the menu but English UI content. Diagnosed live again instead of guessing a
+  fourth variation: `shim.log`'s own timestamps showed the menu-triggered relaunch (pid 2937, via
+  `relaunchWithLanguage:`, which correctly passes `-AppleLanguages`) was followed **~6 seconds later** by
+  a *second*, unrelated-looking `persian_menu_init` boot line for a *different* pid (3007), with `ppid=1`
+  (launchd directly, not a child of 2937). `ps eww -o command=` (piped through `fold` to defeat column
+  truncation, which hid this fact in earlier checks) on that second process showed `DYLD_INSERT_LIBRARIES`
+  present but **zero** `-AppleLanguages`/other argv.
+- **Root cause:** Foresight re-executes itself shortly after a cold launch (for whatever internal reason
+  of its own -- Flutter engine setup, a GPU/Metal context requirement, anything). A re-exec inherits the
+  *environment* (so `DYLD_INSERT_LIBRARIES` survives, which is why the shim/menu still loads and looks
+  correct) but gets a **fresh argv** (so `-AppleLanguages`/`-AppleLocale`, which only populate
+  `NSUserDefaults`'s process-local "argument domain", are gone). This happens on every launch, including
+  ones that looked "always correct" before -- the menu's own relaunch was never actually safe either; it
+  just wasn't caught with hard evidence until this screenshot+log correlation.
+- **Change:** stop relying on `-AppleLanguages` as a launch argument as the *only* mechanism. Added
+  `SetAppleLanguagesPref()` (`shim/persian_menu.m`) that writes the real, on-disk
+  `AppleLanguages`/`AppleLocale` preference under Foresight's own bundle ID via `CFPreferencesSetAppValue`
+  -- a disk preference every process (including a self-re-exec'd one) reads fresh regardless of its argv.
+  Called from `setLanguage:` (menu click) and `persian_menu_init()` (every launch, as early as possible).
+  `launch.sh` does the equivalent via `defaults write com.google.AIEdgeForesight AppleLanguages -array
+  ...`/`AppleLocale` before `exec open`. Kept `-AppleLanguages` as a launch argument too (harmless,
+  doesn't hurt, and the on-disk preference is a lower-priority domain than the argument domain so there's
+  no conflict either way).
+- **Status:** written, not yet rebuilt/verified on macOS. Every previous fix in this thread
+  (`ApplePersistenceIgnoreState`, saved-state deletion, `open -n`) is kept -- each was independently
+  confirmed to do exactly what it claimed, even though none of them was the actual cause of the reported
+  bug.
+
 ## 2026-10-18 — Found the actual root cause: `open -a` without `-n` silently drops `--args`
 
 - **Context:** the `ApplePersistenceIgnoreState` fix (previous entry) was built, pushed, and tested —

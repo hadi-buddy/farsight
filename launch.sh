@@ -26,6 +26,23 @@ case $lang in
   fa) app_args=(--args -AppleLanguages "(fa)" -AppleLocale fa_IR) ;;
   *) app_args=(--args -AppleLanguages "($lang)") ;;
 esac
+# -AppleLanguages/-AppleLocale as a launch *argument* only populates NSUserDefaults'
+# temporary, process-local "argument domain" -- it does NOT survive Foresight
+# re-executing itself shortly after a cold launch (confirmed by log evidence: a
+# second, unrelated-looking Foresight process with no args at all, but the same
+# DYLD_INSERT_LIBRARIES from our *environment*, appears ~6s after every launch).
+# Environment variables survive that re-exec; command-line arguments don't. So
+# also persist the language as a real, on-disk preference under Foresight's own
+# bundle ID -- every process (including the re-exec'd one) reads its own disk
+# preferences fresh, regardless of its argv.
+case $lang in
+  system) defaults delete com.google.AIEdgeForesight AppleLanguages 2>/dev/null
+          defaults delete com.google.AIEdgeForesight AppleLocale 2>/dev/null ;;
+  fa) defaults write com.google.AIEdgeForesight AppleLanguages -array fa
+      defaults write com.google.AIEdgeForesight AppleLocale fa_IR ;;
+  *) defaults write com.google.AIEdgeForesight AppleLanguages -array "$lang"
+     defaults delete com.google.AIEdgeForesight AppleLocale 2>/dev/null ;;
+esac
 # macOS's own window/app state restoration replays the *previous* session's
 # rendered UI (language included) over whatever this launch's locale resolves
 # to -- confirmed by testing. Must happen here, before `open` starts the new
