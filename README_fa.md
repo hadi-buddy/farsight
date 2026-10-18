@@ -113,7 +113,7 @@ Foresight با Flutter ساخته شده و برای رونویسی، یک کت�
 ## سپاس
 
 - بر پایه‌ی [foresight-zh](https://github.com/michaelpersonal/foresight-zh) از michaelpersonal، که روش تزریق را برای چینی پیدا کرد.
-- مدل‌های گفتار فارسی: [شنوا کوچیک](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) و [شنوا ریزه](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) از Reza2kn (Apache-2.0).
+- مدل‌های گفتار فارسی: [شنوا کوچیک](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) و [شنوا ریزه](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) از [Reza2kn](https://github.com/Reza2kn) (Apache-2.0).
 - فونت: [وزیرمتن](https://github.com/rastikerdar/vazirmatn) از صابر راستی‌کردار (SIL OFL 1.1).
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)، [Silero VAD](https://github.com/snakers4/silero-vad)، [cJSON](https://github.com/DaveGamble/cJSON).
 
