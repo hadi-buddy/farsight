@@ -2,6 +2,29 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Fix: the Firebase-locale write was still too late
+
+- **Context:** the previous entry's fix (`SetFirebaseLocale` in `installMenu`) didn't actually fix the
+  reported bug: with فارسی selected and checked in the Language menu, force-quitting Foresight and
+  reopening it still showed English. Root cause was a timing race, not a logic error: `installMenu`
+  runs on `NSApplicationDidFinishLaunchingNotification`, and Foresight's own startup code apparently
+  reads this cached locale key earlier than that — both hang off the same notification (or earlier)
+  with no guaranteed order, so our write landed after Foresight had already rendered off the stale
+  value. Two places deciding the same thing on different schedules, the same shape of bug this whole
+  shim's history keeps running into with timers/observers (see `persian_font.c`'s own interpose-based
+  approach, which sidesteps exactly this by intercepting the read itself rather than racing to write
+  first).
+- **Change (`shim/persian_menu.m`):** moved the `SetFirebaseLocale(CurrentLanguage())` call out of
+  `installMenu` and into `persian_menu_init()` directly — i.e. the dylib's
+  `__attribute__((constructor))`, which runs at image-load time, before Foresight's own `main()` even
+  starts. As early in the process as this shim gets a chance to run anything. Switched
+  `NSRunningApplication.currentApplication.bundleIdentifier` to `NSBundle.mainBundle.bundleIdentifier`
+  for this call specifically, since the former touches AppKit/NSApp machinery that may not be safely
+  usable this early in process startup; `NSBundle` has no such dependency.
+- **Status:** written, not yet verified on macOS — the actual timing-sensitive part (does the
+  constructor really run early enough relative to Foresight's own locale read) can only be confirmed by
+  testing the force-quit/reopen scenario again.
+
 ## 2026-10-18 — Found what actually drives Foresight's UI language
 
 - **Context:** with language set to فارسی, force-quitting Foresight and reopening it (through

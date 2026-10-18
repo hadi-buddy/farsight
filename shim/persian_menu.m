@@ -66,8 +66,18 @@ static NSString *CurrentLanguage(void) {
 // Foresight itself is evidently reading it for this. -AppleLanguages still
 // gets passed too, for anything in the process that does follow the normal
 // macOS mechanism (e.g. our own injected "Language" menu's text direction).
+//
+// Must run before Foresight's own startup code reads this key (observed: a
+// write from installMenu, on NSApplicationDidFinishLaunchingNotification, was
+// too late -- the UI had already rendered off the old value by then, since
+// Foresight's own launch handling and ours both hang off that same
+// notification with no guaranteed order). Called from persian_menu_init(),
+// i.e. the dylib's __attribute__((constructor)), which runs at image-load
+// time, before main() -- as early as this process gets. NSBundle.mainBundle
+// rather than NSRunningApplication: no AppKit/NSApp dependency, so it's safe
+// this early.
 static void SetFirebaseLocale(NSString *lang) {
-  NSString *bundleID = NSRunningApplication.currentApplication.bundleIdentifier;
+  NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
   if (!bundleID) return;
   CFPreferencesSetAppValue(CFSTR("com.firebase.instanceid.user_defaults.locale"), (__bridge CFStringRef)lang,
                             (__bridge CFStringRef)bundleID);
@@ -85,13 +95,6 @@ static void SetFirebaseLocale(NSString *lang) {
 @implementation FarsightMenuController
 
 - (void)installMenu {
-  // Self-heals every launch, not just on a menu click: if this process somehow
-  // started (plain Dock launch caught by watcher.sh, a stale cached value from
-  // before SetFirebaseLocale existed, etc.) with Foresight's cached locale out
-  // of sync with our saved choice, fix it now rather than leave the UI in the
-  // wrong language until the user happens to click the menu again.
-  SetFirebaseLocale(CurrentLanguage());
-
   NSMenu *mainMenu = NSApp.mainMenu;
   if (!mainMenu) {
     logf_("menu: no mainMenu yet, Language menu not added");
@@ -210,6 +213,7 @@ static FarsightMenuController *g_controller;
 void persian_menu_init(const char *home) {
   snprintf(g_lang_file, sizeof g_lang_file, "%s/tools/farsight/lang", home);
   snprintf(g_dylib_path, sizeof g_dylib_path, "%s/tools/farsight/shim/libfarsight.dylib", home);
+  SetFirebaseLocale(CurrentLanguage());  // as early as possible -- see SetFirebaseLocale's comment
   g_controller = [FarsightMenuController new];
   [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidFinishLaunchingNotification
                                                      object:nil
