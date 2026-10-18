@@ -8,7 +8,7 @@ Farsight adds **live Persian transcription** to [Google AI Edge Foresight](https
 
 - 🎙️ **Persian ASR, on-device** — [Shenava Koochik](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx), a 114M-parameter Persian FastConformer model (7.5% WER on its benchmark), running on the CPU through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Audio never leaves the machine.
 - 🔢 **Numbers as digits** — spoken numbers become Persian digits: «هزار و چهارصد و سه» → «۱۴۰۳».
-- 📝 **Persian meeting summaries** — summaries of Persian meetings come back in Persian, from Foresight's own Gemma model or a local model.
+- 📝 **Persian meeting summaries** — summaries of Persian meetings come back in Persian, from Foresight's own Gemma model or a local model, dated with the session's Jalali (Solar Hijri) date.
 - 🔁 **No double lines without headphones** — when the microphone picks up the speakers, the repeated sentence is dropped.
 - 🔤 **Vazirmatn font** — Persian text is drawn in [Vazirmatn](https://github.com/rastikerdar/vazirmatn) instead of the macOS fallback font (`FARSIGHT_FONT=system ./launch.sh` to turn it off).
 - ↔️ **Persian, right-to-left UI** — Foresight ships a Persian translation; Farsight starts it in Persian, so the whole app is laid out right-to-left.
@@ -64,7 +64,7 @@ With `dump = 1`, every phrase is saved as a WAV file plus its transcript in `~/L
 ## Limitations
 
 - **Persian only.** English words inside Persian speech come out as Persian-script approximations. For an English meeting, open Foresight normally (without `launch.sh`).
-- **UI language.** `launch.sh` opens Foresight in Persian (right-to-left). Use `FARSIGHT_LANG=en ./launch.sh` for English or `FARSIGHT_LANG=system` to follow macOS. A few labels, such as "Start transcribing", are not translated by Google (they're drawn by Foresight's own Flutter UI, which Farsight does not — and, as of investigating it, cannot safely — modify). Once Farsight is running, Foresight's own menu bar has a "زبان" menu (next to Window) with فارسی/English — pick one and Foresight relaunches itself in that language; no terminal needed after the first setup.
+- **UI language.** `launch.sh` opens Foresight in Persian (right-to-left). Use `FARSIGHT_LANG=en ./launch.sh` for English or `FARSIGHT_LANG=system` to follow macOS. A few labels, such as "Start transcribing", are not translated by Google (they're drawn by Foresight's own Flutter UI, which Farsight does not — and, as of investigating it, cannot safely — modify). Once Farsight is running, Foresight's own menu bar has a "Language" menu (next to Window) with فارسی/English — pick one and Foresight relaunches itself in that language, with no flash and no terminal needed. The choice also survives a full quit and a normal reopen (Dock, Spotlight, login item): it's written as a real on-disk preference under Foresight's own bundle ID, not just passed as a launch argument, since Foresight re-execs itself shortly after every cold start and loses its own argv in the process.
 - **Phrase by phrase.** Text arrives after each pause (about 0.6 s of silence), not word by word.
 - **Foresight updates** can move what the shim relies on. If Persian text disappears after an update, check `shim.log`; without Farsight the app keeps working in English.
 
@@ -99,6 +99,8 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 | `shim/persian_itn.c` | Spoken Persian numbers → digits |
 | `shim/persian_text.c` | ZWNJ and Persian letter cleanup |
 | `shim/persian_font.c` | Vazirmatn as the font for Persian text (CoreText fallback hook) |
+| `shim/persian_date.c` | Today's date in the Jalali (Solar Hijri) calendar, prepended to Persian summaries |
+| `shim/persian_menu.m` | "Language" menu in Foresight's own menu bar (فارسی/English, relaunches on change) |
 | `shim/chat_bridge.c` | Optional chat/summaries on a local server |
 | `setup-persian.sh` | Downloads the Persian engine |
 | `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |
