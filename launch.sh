@@ -39,4 +39,12 @@ rm -rf "$HOME/Library/Saved Application State/com.google.AIEdgeForesight.savedSt
 # too (not only from persian_menu.m) so it's in effect from the very first
 # run, not only after the shim has launched at least once before.
 defaults write com.google.AIEdgeForesight ApplePersistenceIgnoreState -bool YES 2>/dev/null
-exec open "${env_args[@]}" -a Foresight "${app_args[@]}"
+# -n: force a genuinely new instance. Without it, `open -a` silently drops
+# --args/--env (reactivates the existing process instead of spawning fresh)
+# whenever Foresight isn't fully gone yet -- this was the real bug: the
+# process this script starts for a plain reopen (caught by watcher.sh) always
+# had the shim's DYLD_INSERT_LIBRARIES but never -AppleLanguages, confirmed by
+# inspecting its full, untruncated argv. The menu's own relaunch path
+# (persian_menu.m, NSWorkspaceOpenConfiguration.createsNewApplicationInstance
+# = YES) already forces a new instance and was never affected.
+exec open -n "${env_args[@]}" -a Foresight "${app_args[@]}"

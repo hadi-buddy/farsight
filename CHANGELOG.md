@@ -2,6 +2,37 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Found the actual root cause: `open -a` without `-n` silently drops `--args`
+
+- **Context:** the `ApplePersistenceIgnoreState` fix (previous entry) was built, pushed, and tested —
+  still failed. Stopped adding more fixes to the same (now twice-disproven) "state restoration" theory
+  and went back to direct evidence instead: live-diagnosed the actual failing process on the user's Mac
+  (`launchctl`, `ps`, `watcher.log`, `shim.log`), step by step, rather than guessing a third variation.
+  Confirmed, in order: `ApplePersistenceIgnoreState` was correctly `1` and no saved-state folder existed
+  (that fix *did* take); `watcher.sh`'s LaunchAgent was loaded and running, not rate-limited; the
+  Foresight process in the failing state had `DYLD_INSERT_LIBRARIES` set (shim loaded, menu correct) —
+  but its full, untruncated argv/environment (`ps eww -o command=`, piped through `fold` since the
+  default `ps` column width was truncating it and hiding exactly the part that mattered) had **no
+  `-AppleLanguages`/`-AppleLocale` at all**. The shim and the menu were never the problem; Foresight
+  itself was simply never told which language to render.
+- **Root cause:** `launch.sh`'s `exec open "${env_args[@]}" -a Foresight "${app_args[@]}"` has no `-n`.
+  `open -a AppName --args ...` without `-n` only passes `--args`/some `--env` through when it actually
+  spawns a new process; if Foresight is already running (or still mid-exit) at that moment, `open`
+  reactivates the existing/starting instance instead and silently drops the arguments meant for a fresh
+  launch. This is exactly `watcher.sh`'s call path (it invokes `launch.sh` while the just-detected,
+  unshimmed Foresight is still around) — the one path in this whole project missing a
+  "force a new instance" flag. The menu's own relaunch
+  (`persian_menu.m`'s `relaunchWithLanguage:`, via `NSWorkspaceOpenConfiguration` with
+  `createsNewApplicationInstance = YES`) already forces one, which is exactly why clicking فارسی/English
+  in the menu "always restarts correctly" (confirmed working throughout this entire debugging session)
+  while a plain quit-and-reopen (which goes through `watcher.sh` → `launch.sh`, never through the menu)
+  did not.
+- **Change:** `launch.sh`: `exec open "${env_args[@]}" ...` → `exec open -n "${env_args[@]}" ...`.
+- **Status:** written, not yet rebuilt/verified on macOS. The two previous fixes
+  (`ApplePersistenceIgnoreState`, deleting the saved-state folder) are kept — harmless, and were each
+  independently confirmed to do what they claimed, even though neither was the actual cause of the
+  reported bug.
+
 ## 2026-10-18 — Fix: wrong preference key — `ApplePersistenceIgnoreState`, not `NSQuitAlwaysKeepsWindows`
 
 - **Context:** the previous entry's fix (delete the saved-state folder before launch, from `launch.sh`
