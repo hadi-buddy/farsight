@@ -2,6 +2,15 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Persian UI by default
+
+- **Context:** testing `FARSIGHT_LANG=fa` showed Foresight ships a Persian translation: the whole UI
+  switched to Persian and right-to-left, with no patching needed.
+- **Change:** `launch.sh` now starts Foresight in Persian by default (`-AppleLanguages (fa)`,
+  `-AppleLocale fa_IR`); `FARSIGHT_LANG=en` or `system` overrides. READMEs updated; the
+  "left-to-right layout" limitation is gone.
+- **Status:** verified on macOS (Persian RTL UI).
+
 ## 2026-10-18 — Persian orthography, VAD pre-roll, RTL experiment
 
 - **Context:** the first live run showed «می شه» / «طرح های» without ZWNJ, and a clipped first
