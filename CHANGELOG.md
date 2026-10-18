@@ -2,6 +2,41 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Found what actually drives Foresight's UI language
+
+- **Context:** with language set to فارسی, force-quitting Foresight and reopening it (through
+  `watcher.sh`'s catch-up relaunch) showed the UI in English, even though `ps` confirmed the process
+  had launched with `-AppleLanguages (fa) -AppleLocale fa_IR` correctly set. Searched
+  `~/Library/Application Support/com.google.AIEdgeForesight/{key_value_store,database}.sqlite`
+  (Foresight's own Flutter `shared_preferences`/app-data stores) for any internal language setting
+  overriding it — found none, ruling that theory out. Found instead, in
+  `~/Library/Preferences/com.google.AIEdgeForesight.plist`, a key named
+  `com.firebase.instanceid.user_defaults.locale` stuck at `en`. Writing it to `fa` by hand
+  (`defaults write com.google.AIEdgeForesight com.firebase.instanceid.user_defaults.locale -string fa`)
+  and relaunching switched the UI to Persian — confirming Foresight keys its own displayed language off
+  this cached value (a Firebase-named key, but evidently read by Foresight itself for this), not off
+  `-AppleLanguages`. Consistent with finding no `fa.lproj`/`Localizable.strings` anywhere in the bundle
+  earlier (see "Menu-bar language switcher"): the UI strings likely don't come from a bundled
+  localization table at all.
+- **Change (`shim/persian_menu.m`):** `SetFirebaseLocale()` writes this key via
+  `CFPreferencesSetAppValue`/`CFPreferencesAppSynchronize` against Foresight's own bundle ID (read from
+  `NSRunningApplication`, not hardcoded) — called from `setLanguage:` (every menu click) and again from
+  `installMenu` on every launch, so a launch that bypassed the menu (a plain Dock open caught by
+  `watcher.sh`) still self-heals instead of leaving the UI on a stale cached language.
+  `-AppleLanguages`/`-AppleLocale` are still passed on relaunch too, for whatever in the process does
+  follow the normal macOS mechanism (confirmed: our own "Language" menu's own text/RTL handling does).
+- **Not changed:** considered and reverted a separate attempt at eliminating the launch flash entirely
+  via `LSEnvironment` in Foresight's own `Info.plist` (so the OS sets `DYLD_INSERT_LIBRARIES` with zero
+  restart) — it required ad-hoc re-signing the app, which broke Foresight's existing Keychain-stored
+  Google Sign-In token access (ad-hoc signatures have no stable Team ID, so macOS can't make an "Always
+  Allow" Keychain grant persist across launches the way it does for a real Developer ID signature — the
+  prompt kept coming back). Not something a non-developer could be asked to work around (creating and
+  trusting a local code-signing certificate), so reverted: reinstalled Foresight fresh from the official
+  source to restore its original Google signature and Keychain access, and kept the 500 ms watcher loop
+  (previous entry) as the actual answer for the launch flash.
+- **Status:** written; `SetFirebaseLocale` verified working via the manual `defaults write` test above,
+  the code path itself not yet rebuilt/tested on macOS.
+
 ## 2026-10-18 — Watcher poll: 1s → 0.5s, via a persistent loop
 
 - **Context:** asked for the unshimmed-launch flash to be cut to 500ms. launchd's `StartInterval` key
