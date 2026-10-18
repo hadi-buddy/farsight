@@ -695,10 +695,52 @@ static char *gemma_language_msg(const char *msg) {
   return out;
 }
 
+// Gemma sampling. Foresight runs Gemma at temperature 0.4 / top_k 40. At that
+// temperature the small on-device model garbles Persian words in summaries
+// («تحلی» for «تحلیلی», «تعاری» for «تعاریف»). Lower values keep it on the most
+// likely spelling. FARSIGHT_GEMMA_SAMPLING="<temperature>,<top_k>" (default
+// "0.1,10"), or "app" to keep Foresight's own values.
+static int set_sampling(cJSON *j, double temp, int top_k, int depth) {
+  int n = 0;
+  if (!j || depth > 4) return 0;
+  cJSON *c;
+  cJSON_ArrayForEach(c, j) {
+    if (c->string && cJSON_IsNumber(c) && !strcmp(c->string, "temperature")) {
+      cJSON_SetNumberValue(c, temp);
+      n++;
+    } else if (c->string && cJSON_IsNumber(c) && !strcmp(c->string, "top_k")) {
+      cJSON_SetNumberValue(c, top_k);
+      n++;
+    } else if (cJSON_IsObject(c)) {
+      n += set_sampling(c, temp, top_k, depth + 1);
+    }
+  }
+  return n;
+}
+
+static void *gemma_create(void *engine, const char *config_json) {
+  const char *pref = getenv("FARSIGHT_GEMMA_SAMPLING");
+  if (!config_json || (pref && !strcmp(pref, "app"))) return R.create_v2(engine, config_json);
+  double temp = 0.1;
+  int top_k = 10;
+  if (pref) sscanf(pref, "%lf,%d", &temp, &top_k);
+  cJSON *cfg = cJSON_Parse(config_json);
+  if (!cfg) return R.create_v2(engine, config_json);
+  int n = set_sampling(cfg, temp, top_k, 0);
+  char *out = n ? cJSON_PrintUnformatted(cfg) : NULL;
+  cJSON_Delete(cfg);
+  static int logged;
+  if (!logged++) logf_("chat: Gemma sampling %s", n ? "set to low temperature" : "fields not found, unchanged");
+  if (!out) return R.create_v2(engine, config_json);
+  void *conv = R.create_v2(engine, out);
+  free(out);
+  return conv;
+}
+
 // ------------------------------------------------------------ replacements ---
 
 static void *my_create_v2(void *engine, const char *config_json) {
-  if (!config_json || !server_up()) return R.create_v2(engine, config_json);
+  if (!config_json || !server_up()) return gemma_create(engine, config_json);
   cJSON *cfg = cJSON_Parse(config_json);
   if (!cfg) return R.create_v2(engine, config_json);
   cJSON *msgs = cJSON_CreateArray();
@@ -833,7 +875,11 @@ void chat_bridge_init(const char *home, int trace) {
 
 void *chat_bridge_wrap(const char *symbol, void *real) {
   if (!g_url[0]) {
-    // Bridge off: still wrap sending, so Gemma gets the Persian instruction.
+    // Bridge off: still wrap creation (sampling) and sending (Persian instruction) for Gemma.
+    if (strcmp(symbol, "litert_lm_create_conversation_v2") == 0) {
+      R.create_v2 = (create_v2_fn)real;
+      return (void *)gemma_create;
+    }
     if (strcmp(symbol, "litert_lm_conversation_send_message_stream") == 0) {
       R.send_stream = (send_stream_fn)real;
       return (void *)my_send_stream;

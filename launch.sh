@@ -15,6 +15,7 @@ env_args=(--env "DYLD_INSERT_LIBRARIES=$SHIM")
 [[ -n "$FARSIGHT_TRACE" ]] && env_args+=(--env "FARSIGHT_TRACE=$FARSIGHT_TRACE")
 [[ -n "$FARSIGHT_FONT" ]] && env_args+=(--env "FARSIGHT_FONT=$FARSIGHT_FONT")
 [[ -n "$FARSIGHT_HEADINGS" ]] && env_args+=(--env "FARSIGHT_HEADINGS=$FARSIGHT_HEADINGS")
+[[ -n "$FARSIGHT_GEMMA_SAMPLING" ]] && env_args+=(--env "FARSIGHT_GEMMA_SAMPLING=$FARSIGHT_GEMMA_SAMPLING")
 lang=${FARSIGHT_LANG:-fa}
 app_args=()
 case $lang in
