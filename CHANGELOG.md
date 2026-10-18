@@ -2,6 +2,31 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Fix: delete the saved-state folder before launch, not inside it
+
+- **Context:** the previous entry's fix (`DisableStateRestoration` deleting the saved-state folder
+  inside `persian_menu_init`, the dylib constructor) was built and tested — bug still reproduced,
+  screenshot confirmed: فارسی checked in the menu, UI still English. The deletion itself was proven to
+  work (that's the whole previous entry), so the remaining variable was timing: our constructor runs
+  before `main()`, about as early as a launched process ever lets injected code run — but apparently
+  *not* early enough. Whatever applies the saved state is evidently done by the time our constructor
+  gets a chance to run at all, even though nothing in Foresight's own code should execute before ours
+  does by the usual C/ObjC load order. The one combination that did work in manual testing was always:
+  delete the folder, *then* launch Foresight as a fresh step — i.e. the delete has to happen in the
+  process doing the launching, before it launches, never inside the launched process itself.
+- **Change:**
+  - `launch.sh`: deletes `~/Library/Saved Application State/com.google.AIEdgeForesight.savedState`
+    right before the `exec open` line that actually starts Foresight. Covers both direct use and
+    `watcher.sh`'s catch-and-relaunch path, since both end up here.
+  - `shim/persian_menu.m`: split the old `DisableStateRestoration` into `DeleteSavedState()` (called
+    from `relaunchWithLanguage:`, in the still-running old process, right before
+    `openApplicationAtURL` spawns the new one — same timing as `launch.sh`'s fix, just from Objective-C)
+    and `DisableFutureStateSaving()` (kept in `persian_menu_init`, the dylib constructor): sets
+    `NSQuitAlwaysKeepsWindows=false` so macOS stops saving state going forward, as a safety net for any
+    launch path that runs before `launch.sh`/`relaunchWithLanguage:` get a chance to delete anything
+    fresh (a login item, a system-triggered relaunch after a crash).
+- **Status:** written, not yet rebuilt/verified on macOS.
+
 ## 2026-10-18 — Found the real cause: macOS window-state restoration, not a locale key at all
 
 - **Context:** the "menu says فارسی, app opens in English" bug survived every previous fix in this
