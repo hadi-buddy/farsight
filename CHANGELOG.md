@@ -2,6 +2,15 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Resumable downloads in setup-persian.sh
+
+- **Context:** on a slow or unstable connection the sherpa-onnx download (silent `curl | tar`)
+  looked frozen, and any drop meant starting over.
+- **Change:** a `fetch` helper downloads to `<file>.part` with a progress bar and resumes with
+  `curl -C -` after a drop (up to 50 tries; a stall under 1 KB/s for 60 s counts as a drop).
+  Used for sherpa-onnx, Shenava and Silero VAD.
+- **Status:** done.
+
 ## 2026-10-17 — Rename to Farsight; new README
 
 - **Context:** the fork should stand as its own project, findable by people searching for

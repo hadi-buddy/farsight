@@ -10,22 +10,34 @@ HF=https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx/resolve/main
 FA="$DEST/persian/shenava-rizeh-v1.0"
 mkdir -p "$DEST/sensevoice" "$DEST/sherpa-onnx" "$FA"
 
+# Resumable download: keeps a .part file and continues from it after a dropped connection.
+fetch() {  # fetch <url> <dest>
+  [[ -s "$2" ]] && return 0
+  local tries=0
+  until curl -fL --progress-bar -C - --connect-timeout 20 --speed-limit 1024 --speed-time 60 \
+      -o "$2.part" "$1"; do
+    (( ++tries >= 50 )) && { echo "download failed: $1"; return 1; }
+    echo "connection dropped - resuming ($tries)..."; sleep 3
+  done
+  mv "$2.part" "$2"
+}
+
 if [[ ! -f "$DEST/sherpa-onnx/lib/libsherpa-onnx-c-api.dylib" ]]; then
   echo "downloading sherpa-onnx $SHERPA_VERSION"
+  ARCHIVE="$DEST/sherpa-onnx-v$SHERPA_VERSION.tar.bz2"
+  fetch "$REL/v$SHERPA_VERSION/sherpa-onnx-v$SHERPA_VERSION-osx-arm64-shared-no-tts-lib.tar.bz2" "$ARCHIVE"
   tmp=$(mktemp -d)
-  curl -fsSL "$REL/v$SHERPA_VERSION/sherpa-onnx-v$SHERPA_VERSION-osx-arm64-shared-no-tts-lib.tar.bz2" | tar xj -C "$tmp"
-  rm -rf "$DEST/sherpa-onnx/lib" && mv "$tmp"/*/lib "$DEST/sherpa-onnx/lib" && rm -rf "$tmp"
+  tar xjf "$ARCHIVE" -C "$tmp"
+  rm -rf "$DEST/sherpa-onnx/lib" && mv "$tmp"/*/lib "$DEST/sherpa-onnx/lib" && rm -rf "$tmp" "$ARCHIVE"
 fi
-for f in model.onnx tokens.txt LICENSE; do
-  if [[ ! -s "$FA/$f" ]]; then
-    echo "downloading Shenava Rizeh v1.0: $f"
-    curl -fL --progress-bar -o "$FA/$f.part" "$HF/$f" && mv "$FA/$f.part" "$FA/$f" ||
-      { [[ $f == LICENSE ]] && rm -f "$FA/$f.part" || exit 1; }
-  fi
+for f in model.onnx tokens.txt; do
+  echo "downloading Shenava Rizeh v1.0: $f"
+  fetch "$HF/$f" "$FA/$f"
 done
+[[ -s "$FA/LICENSE" ]] || curl -fsL --max-time 30 -o "$FA/LICENSE" "$HF/LICENSE" || rm -f "$FA/LICENSE"
 if [[ ! -f "$DEST/sensevoice/silero_vad.onnx" ]]; then
   echo "downloading Silero VAD"
-  curl -fsSL -o "$DEST/sensevoice/silero_vad.onnx" "$REL/asr-models/silero_vad.onnx"
+  fetch "$REL/asr-models/silero_vad.onnx" "$DEST/sensevoice/silero_vad.onnx"
 fi
 rm -f "${0:A:h}/engine"  # no override: the shim defaults to persian
 du -sh "$DEST"
