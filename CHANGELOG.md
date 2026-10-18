@@ -2,6 +2,28 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Also write the Firebase locale via NSUserDefaults
+
+- **Context:** the constructor-timing fix (previous entry) still didn't fix the reported bug, but this
+  time the log evidence ruled out timing as the cause: `SetFirebaseLocale(fa) ... sync=1
+  readback=fa`, 8 ms after `farsight loaded`, and the on-disk plist confirmed `fa` too — the write is
+  provably early, successful, and persisted. Yet the UI reportedly still showed English.
+  The one real difference between this and the working manual test (`defaults write` then `killall` then
+  `./launch.sh`) is *which process* does the writing: the manual test wrote from a separate `defaults`
+  process before Foresight even started; our code writes from inside Foresight's own process, very
+  early but still during its lifetime. `CFPreferencesSetAppValue`/`CFPreferencesAppSynchronize` is one
+  read/write path; if Foresight (or a library inside it, e.g. the Firebase SDK that names this key)
+  actually reads this value through `[NSUserDefaults standardUserDefaults]` instead, and something
+  already caused that singleton to exist and cache the old value before our constructor got a chance to
+  run, our CFPreferences-level write might not be visible through that cached instance even though it's
+  genuinely correct at the CFPreferences/plist level.
+- **Change (`shim/persian_menu.m`):** `SetFirebaseLocale()` now also writes the same key through
+  `[NSUserDefaults standardUserDefaults] setObject:forKey:]` + `synchronize`, covering both possible
+  read paths instead of assuming which one Foresight actually uses. Logs both readbacks
+  (`cf_readback=`/`ud_readback=`) so a next mismatch, if there is one, is visible directly instead of
+  needing another round of `plutil`/log archaeology.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-18 — Fix: the Firebase-locale write was still too late
 
 - **Context:** the previous entry's fix (`SetFirebaseLocale` in `installMenu`) didn't actually fix the

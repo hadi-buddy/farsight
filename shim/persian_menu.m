@@ -88,8 +88,20 @@ static void SetFirebaseLocale(NSString *lang) {
   Boolean ok = CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
   CFPropertyListRef readback =
       CFPreferencesCopyAppValue(CFSTR("com.firebase.instanceid.user_defaults.locale"), (__bridge CFStringRef)bundleID);
-  logf_("menu: SetFirebaseLocale(%s) bundle=%s sync=%d readback=%s", lang.UTF8String, bundleID.UTF8String, ok,
-        readback ? [(__bridge NSString *)readback UTF8String] : "(nil)");
+
+  // Also via NSUserDefaults: if anything in this same process already holds
+  // [NSUserDefaults standardUserDefaults] with its own in-memory snapshot
+  // (populated before this constructor ran), CFPreferencesSetAppValue alone
+  // may not be visible to code reading through that instance. Covers both
+  // possible read paths rather than assuming which one Foresight actually
+  // uses.
+  [NSUserDefaults.standardUserDefaults setObject:lang forKey:@"com.firebase.instanceid.user_defaults.locale"];
+  [NSUserDefaults.standardUserDefaults synchronize];
+  NSString *udReadback = [NSUserDefaults.standardUserDefaults stringForKey:@"com.firebase.instanceid.user_defaults.locale"];
+
+  logf_("menu: SetFirebaseLocale(%s) bundle=%s sync=%d cf_readback=%s ud_readback=%s", lang.UTF8String,
+        bundleID.UTF8String, ok, readback ? [(__bridge NSString *)readback UTF8String] : "(nil)",
+        udReadback.UTF8String ?: "(nil)");
   if (readback) CFRelease(readback);
 }
 
