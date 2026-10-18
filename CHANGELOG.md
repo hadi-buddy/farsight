@@ -2,6 +2,30 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Jalali date on Persian summaries
+
+- **Context:** Persian summaries had no date at all; the user has to be able to tell, from the
+  summary text itself, which session it is from — in the Solar Hijri (Jalali) calendar, not Gregorian.
+- **Change:**
+  - `shim/persian_date.c`/`.h` (new): `jalali_from_gregorian()`, a pure Gregorian→Jalali conversion
+    (public-domain Borkowski algorithm; checked against the Unix epoch, Y2K, three Nowruz dates and
+    22 Bahman 1357); `jalali_date_string(time_t)`, formats it in Persian digits and month names
+    («۲۶ مهر ۱۴۰۵»); `persian_summary_note(en_headings, time_t)`, the instruction text itself
+    (moved out of `chat_bridge.c`'s `persian_note()`, which is now a 2-line wrapper passing
+    `time(NULL)` — the actual session time, not a previous summary's or a hardcoded one).
+  - The instruction now also asks the model to start its reply with that exact date line, then a
+    blank line, before the first heading. Same instruction text otherwise, so `FARSIGHT_HEADINGS=en`
+    still keeps the English headings; only one sentence with the date was added to each template.
+  - `persian_note()`'s return is now malloc'ed (was a static string); its two callers
+    (`match_transcript_language`, `gemma_language_msg`) free it on every exit path.
+  - `shim/build.sh`: links `persian_date.c` into the dylib.
+- **Tests:** `shim/test/date_test.c` (new) — conversion against the known reference dates above,
+  formatting against fixed `time_t` values (`TZ=UTC` for determinism), and that
+  `persian_summary_note()` carries the exact date and the right heading language. Wired into
+  `shim/test/itn_test.sh`.
+- **Status:** unit tests pass (`sh shim/test/itn_test.sh`); to verify on macOS that a real Persian
+  summary starts with the date line.
+
 ## 2026-10-18 — Lower Gemma temperature for Persian summaries
 
 - **Context:** Gemma's Persian summaries had garbled words in every run («تحلی» for «تحلیلی»,

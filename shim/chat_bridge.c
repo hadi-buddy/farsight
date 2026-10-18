@@ -30,6 +30,7 @@
 #include <time.h>
 
 #include "cJSON.h"
+#include "persian_date.h"
 
 extern void logf_(const char *fmt, ...);
 
@@ -182,21 +183,14 @@ static double script_share(const char *s, int want_cjk) {
   return letters ? (double)hit / letters : 0;
 }
 
-// "Write in Persian" instruction for summaries of Persian transcripts. By default
-// the template's headings are translated too («# مرور کلی», «# جزئیات»);
+// "Write in Persian" instruction for summaries of Persian transcripts, with
+// today's Jalali date to prepend to the summary (see persian_date.h). By
+// default the template's headings are translated too («# مرور کلی», «# جزئیات»);
 // FARSIGHT_HEADINGS=en keeps them in English. JSON keys always stay in English.
-static const char *persian_note(void) {
-  static const char fa[] =
-      "\n\nLanguage: the transcript is in Persian (Farsi). Write all of your output in Persian (Farsi), "
-      "including the markdown headings: write \"# مرور کلی\" instead of \"# Overview\" and "
-      "\"# جزئیات\" instead of \"# Details\", and translate any other heading the same way. "
-      "Keep any required JSON keys or field names exactly as specified, in English.";
-  static const char en[] =
-      "\n\nLanguage: the transcript is in Persian (Farsi). Write all of your output in Persian (Farsi). "
-      "Keep the template's markdown headings (such as \"# Overview\" and \"# Details\") and any "
-      "required JSON keys or field names exactly as specified, in English.";
+// Returns a malloc'ed string; the caller frees it.
+static char *persian_note(void) {
   const char *h = getenv("FARSIGHT_HEADINGS");
-  return h && strcmp(h, "en") == 0 ? en : fa;
+  return persian_summary_note(h && strcmp(h, "en") == 0, time(NULL));
 }
 
 // Script share measured only inside the transcript tags, so a long English
@@ -481,11 +475,18 @@ static void match_transcript_language(cJSON *msgs) {
       "\n\nLanguage: the transcript is in Chinese. Write all of your output in Simplified Chinese. "
       "Keep the template's markdown headings (such as \"# Overview\" and \"# Details\") and any "
       "required JSON keys or field names exactly as specified, in English.";
-  const char *note_fa = persian_note();
+  char *note_fa = NULL;
   const char *note, *lang;
-  if (transcript_share(t, 1) >= 0.3) note = note_zh, lang = "Chinese";
-  else if (transcript_share(t, 0) >= 0.3) note = note_fa, lang = "Persian";
-  else return;
+  if (transcript_share(t, 1) >= 0.3) {
+    note = note_zh;
+    lang = "Chinese";
+  } else if (transcript_share(t, 0) >= 0.3) {
+    note_fa = persian_note();
+    note = note_fa;
+    lang = "Persian";
+  } else {
+    return;
+  }
   cJSON *first = cJSON_GetArrayItem(msgs, 0);
   const cJSON *role = cJSON_GetObjectItemCaseSensitive(first, "role");
   const cJSON *sys = cJSON_GetObjectItemCaseSensitive(first, "content");
@@ -502,6 +503,7 @@ static void match_transcript_language(cJSON *msgs) {
     cJSON_InsertItemInArray(msgs, 0, o);
   }
   logf_("chat: %s transcript -> asking for %s output", lang, lang);
+  free(note_fa);
 }
 
 // Runs one request against the server, appending the reply to the history.
@@ -673,7 +675,7 @@ static char *gemma_language_msg(const char *msg) {
     cJSON_Delete(m);
     return NULL;
   }
-  const char *note = persian_note();
+  char *note = persian_note();
   if (cJSON_IsString(content)) {
     size_t n = strlen(content->valuestring) + strlen(note) + 1;
     char *merged = malloc(n);
@@ -686,9 +688,11 @@ static char *gemma_language_msg(const char *msg) {
     cJSON_AddStringToObject(part, "text", note + 2);
     cJSON_AddItemToArray(content, part);
   } else {
+    free(note);
     cJSON_Delete(m);
     return NULL;
   }
+  free(note);
   char *out = cJSON_PrintUnformatted(m);
   cJSON_Delete(m);
   logf_("chat: Persian transcript -> asking Gemma for Persian output");
