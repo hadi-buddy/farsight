@@ -2,6 +2,21 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Vazirmatn font for Persian text
+
+- **Context:** Persian text in Foresight used the macOS fallback font; Vazirmatn is the expected
+  Persian UI font.
+- **Change:**
+  - `shim/persian_font.c` (new): registers `~/Library/Application Support/farsight/fonts/Vazirmatn-*.ttf`
+    for the process and interposes `CTFontCreateForString` / `…WithLanguage`. For a run that starts
+    with an Arabic-script character it returns Vazirmatn at the same size and the nearest of nine
+    weights (from the requested font's `kCTFontWeightTrait`); everything else is unchanged.
+    Logs `font: Vazirmatn in use` the first time. `FARSIGHT_FONT=system` disables it.
+  - `setup-persian.sh` downloads the nine static Vazirmatn TTFs (pinned commit 6e553e3, SIL OFL 1.1).
+  - `shim/build.sh` links CoreText and CoreFoundation.
+- **Status:** compiles against stub headers on Linux; to verify on macOS. If Flutter does not go
+  through CoreText for fallback, the log will show registration but no "in use" line.
+
 ## 2026-10-18 — Bigger Persian model; longer phrase pause
 
 - **Context:** with Rizeh (32M) the live test gave «حدمند» for «هدفمند», and the phrase was split

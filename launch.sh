@@ -3,6 +3,7 @@
 # FARSIGHT_TRACE=1 launch.sh  -> log every ODML call and transcript result to ~/Library/Logs/farsight/shim.log
 # UI language: Persian (right-to-left) by default. FARSIGHT_LANG=en launch.sh for English,
 #              FARSIGHT_LANG=system to follow the macOS language.
+# Font: Persian text uses Vazirmatn when installed; FARSIGHT_FONT=system launch.sh keeps the macOS font.
 SHIM="${0:A:h}/shim/libfarsight.dylib"
 if pgrep -x Foresight >/dev/null; then
   osascript -e 'tell application "Foresight" to quit' >/dev/null 2>&1
@@ -11,6 +12,7 @@ if pgrep -x Foresight >/dev/null; then
 fi
 env_args=(--env "DYLD_INSERT_LIBRARIES=$SHIM")
 [[ -n "$FARSIGHT_TRACE" ]] && env_args+=(--env "FARSIGHT_TRACE=$FARSIGHT_TRACE")
+[[ -n "$FARSIGHT_FONT" ]] && env_args+=(--env "FARSIGHT_FONT=$FARSIGHT_FONT")
 lang=${FARSIGHT_LANG:-fa}
 app_args=()
 case $lang in

@@ -9,6 +9,7 @@ Farsight adds **live Persian transcription** to [Google AI Edge Foresight](https
 - 🎙️ **Persian ASR, on-device** — [Shenava Koochik](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx), a 114M-parameter Persian FastConformer model (7.5% WER on its benchmark), running on the CPU through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Audio never leaves the machine.
 - 🔢 **Numbers as digits** — spoken numbers become Persian digits: «هزار و چهارصد و سه» → «۱۴۰۳».
 - 📝 **Persian meeting summaries** — when chat is routed to a local model, summaries of Persian meetings come back in Persian.
+- 🔤 **Vazirmatn font** — Persian text is drawn in [Vazirmatn](https://github.com/rastikerdar/vazirmatn) instead of the macOS fallback font (`FARSIGHT_FONT=system ./launch.sh` to turn it off).
 - ↔️ **Persian, right-to-left UI** — Foresight ships a Persian translation; Farsight starts it in Persian, so the whole app is laid out right-to-left.
 - 🧩 **No patched app** — Foresight's files and Google's code signature stay untouched; launching Foresight normally still gives you the stock English app.
 
@@ -68,6 +69,8 @@ Foresight is a Flutter app. Its Dart code reaches Google's transcription library
 2. **The ASCII filter is lifted.** Foresight's Dart layer deletes every character outside printable ASCII from transcripts, which would erase all Persian. The shim rewrites that regular expression in memory (copy-on-write; the file on disk is unchanged) so only control characters are removed.
 3. **Persian text is cleaned up.** Shenava spells numbers out; `shim/persian_itn.c` turns well-formed spoken numbers into Persian digits (a lone «یک» stays a word, since it usually means "a"). `shim/persian_text.c` adds zero-width non-joiners («می‌شه», «طرح‌های») and fixes Arabic ي/ك. Each phrase is decoded with 0.35 s of audio before the detected start, so first syllables are not clipped. Tests: `shim/test/itn_test.sh`.
 
+4. **Vazirmatn for Persian text.** Foresight's fonts have no Persian glyphs, so Flutter asks macOS (CoreText `CTFontCreateForString`) for a fallback font. The shim answers that call with Vazirmatn at the matching size and weight for Arabic-script runs. See `shim/persian_font.c`.
+
 If the Persian model is missing or fails to load, the shim falls back to SenseVoice (if installed) and then to Foresight's own English engine.
 
 ## Advanced: chat and summaries on a local model
@@ -88,6 +91,7 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 | `shim/sensevoice_engine.c` | VAD + speech model via sherpa-onnx (Persian or SenseVoice) |
 | `shim/persian_itn.c` | Spoken Persian numbers → digits |
 | `shim/persian_text.c` | ZWNJ and Persian letter cleanup |
+| `shim/persian_font.c` | Vazirmatn as the font for Persian text (CoreText fallback hook) |
 | `shim/chat_bridge.c` | Optional chat/summaries on a local server |
 | `setup-persian.sh` | Downloads the Persian engine |
 | `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |
@@ -97,4 +101,5 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 
 - Built on [foresight-zh](https://github.com/michaelpersonal/foresight-zh) by michaelpersonal, which worked out the injection approach for Chinese.
 - Persian speech models: [Shenava Koochik v1.0](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) and [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) by Reza2kn (Apache-2.0).
+- Font: [Vazirmatn](https://github.com/rastikerdar/vazirmatn) by Saber Rastikerdar (SIL OFL 1.1).
 - Inference: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), [Silero VAD](https://github.com/snakers4/silero-vad) (MIT), [cJSON](https://github.com/DaveGamble/cJSON) (MIT).
