@@ -123,6 +123,88 @@ static char *join_zwnj(const char *in) {
   return out;
 }
 
+// --- step 3: punctuation ----------------------------------------------------
+//
+// Each phrase ends at a pause of ~0.9 s, which is usually the end of a sentence.
+//   - question word at the start, or a tag question at the end -> «؟»
+//   - ends on a connector («که»، «و»، «ولی»، …) -> no mark, the sentence goes on
+//   - otherwise -> «.»
+// Inside a phrase, «،» goes before «اما / ولی / چون / یعنی» when at least two
+// words precede it.
+
+static const char *kQuestionStart[] = {"آیا", "چرا", "چطور", "چطوری", "چگونه", "کجا", "کجای", "کی",
+                                       "چی", "چیه", "چه", "چند", "چندتا", "چقدر", "کدوم", "کدام", "مگه"};
+static const char *kQuestionEnd[] = {"نه", "مگه", "چی", "چیه", "کجاست", "کیه", "چطوره", "دیگه؟"};
+static const char *kContinue[] = {"که", "و", "یا", "اما", "ولی", "با", "از", "به", "در", "برای", "این",
+                                  "اون", "آن", "را", "رو", "تا", "اگه", "اگر", "چون", "هم", "یعنی", "مثل",
+                                  "بین", "روی", "توی", "تو", "بعد", "قبل", "وقتی", "هر", "یه", "یک"};
+static const char *kCommaBefore[] = {"اما", "ولی", "چون", "یعنی"};
+
+static int in_list(const char *s, size_t len, const char **list, size_t n) {
+  for (size_t i = 0; i < n; i++)
+    if (strlen(list[i]) == len && memcmp(list[i], s, len) == 0) return 1;
+  return 0;
+}
+#define IN(s, len, list) in_list(s, len, list, sizeof list / sizeof *list)
+
+// Byte length of a trailing ASCII or Persian punctuation mark, 0 if none.
+static size_t trailing_mark(const char *s, size_t len) {
+  if (len >= 1 && strchr(".!?:;", s[len - 1])) return 1;
+  if (len >= 2) {
+    const unsigned char *e = (const unsigned char *)s + len - 2;
+    if ((e[0] == 0xD8 && (e[1] == 0x9F || e[1] == 0x8C || e[1] == 0x9B))) return 2;  // ؟ ، ؛
+  }
+  return 0;
+}
+
+char *persian_punctuate(const char *text) {
+  if (!text) return NULL;
+  size_t L = strlen(text);
+  char *out = malloc(L * 2 + 16);
+  size_t o = 0;
+  // Words are separated by ASCII spaces (ZWNJ stays inside a word).
+  const char *w[256];
+  size_t wl[256];
+  int n = 0;
+  for (size_t p = 0; p < L && n < 256;) {
+    while (p < L && text[p] == ' ') p++;
+    if (p >= L) break;
+    size_t q = p;
+    while (q < L && text[q] != ' ') q++;
+    w[n] = text + p, wl[n] = q - p, n++;
+    p = q;
+  }
+  if (n == 0 || n >= 256) {
+    memcpy(out, text, L + 1);
+    return out;
+  }
+  for (int i = 0; i < n; i++) {
+    if (i) {
+      if (i >= 2 && IN(w[i], wl[i], kCommaBefore) && !trailing_mark(w[i - 1], wl[i - 1])) {
+        memcpy(out + o, "\xD8\x8C", 2);  // ،
+        o += 2;
+      }
+      out[o++] = ' ';
+    }
+    memcpy(out + o, w[i], wl[i]);
+    o += wl[i];
+  }
+  const char *last = w[n - 1];
+  size_t lastl = wl[n - 1];
+  if (!trailing_mark(last, lastl)) {
+    int question = IN(w[0], wl[0], kQuestionStart) || (n >= 2 && IN(last, lastl, kQuestionEnd));
+    int cont = IN(last, lastl, kContinue);
+    if (question) {
+      memcpy(out + o, "\xD8\x9F", 2);  // ؟
+      o += 2;
+    } else if (!cont) {
+      out[o++] = '.';
+    }
+  }
+  out[o] = 0;
+  return out;
+}
+
 char *persian_fix(const char *text) {
   if (!text) return NULL;
   char *a = map_chars(text);
