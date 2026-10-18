@@ -6,7 +6,7 @@
 
 Farsight adds **live Persian transcription** to [Google AI Edge Foresight](https://ai.google.dev/edge), Google's on-device meeting-notes app for macOS. Foresight ships with an English-only speech model; Farsight swaps in an open Persian model at runtime, so meetings, calls and voice notes in Farsi are transcribed **fully offline, on your Mac**, with no change to the app itself.
 
-- 🎙️ **Persian ASR, on-device** — [Shenava Rizeh](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx), a Persian FastConformer model, running on the CPU through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Audio never leaves the machine.
+- 🎙️ **Persian ASR, on-device** — [Shenava Koochik](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx), a 114M-parameter Persian FastConformer model (7.5% WER on its benchmark), running on the CPU through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Audio never leaves the machine.
 - 🔢 **Numbers as digits** — spoken numbers become Persian digits: «هزار و چهارصد و سه» → «۱۴۰۳».
 - 📝 **Persian meeting summaries** — when chat is routed to a local model, summaries of Persian meetings come back in Persian.
 - ↔️ **Persian, right-to-left UI** — Foresight ships a Persian translation; Farsight starts it in Persian, so the whole app is laid out right-to-left.
@@ -19,14 +19,14 @@ Farsight adds **live Persian transcription** to [Google AI Edge Foresight](https
 - macOS on Apple Silicon
 - Google AI Edge Foresight, opened once with its model downloads finished
 - Xcode Command Line Tools (`xcode-select --install`)
-- About 150 MB of disk space for the Persian engine
+- About 500 MB of disk space for the Persian engine (or ~150 MB with `FARSIGHT_MODEL=rizeh ./setup-persian.sh`, a smaller, less accurate model)
 
 ## Install
 
 ```bash
 git clone https://github.com/hadi-buddy/farsight.git ~/tools/farsight
 cd ~/tools/farsight
-./setup-persian.sh     # sherpa-onnx + Shenava Rizeh + Silero VAD → ~/Library/Application Support/farsight
+./setup-persian.sh     # sherpa-onnx + Shenava Koochik + Silero VAD → ~/Library/Application Support/farsight
 shim/build.sh          # builds shim/libfarsight.dylib
 ./launch.sh            # restarts Foresight with Persian transcription
 ```
@@ -64,7 +64,7 @@ To log every transcript for debugging: `FARSIGHT_TRACE=1 ./launch.sh`.
 
 Foresight is a Flutter app. Its Dart code reaches Google's transcription library through a C API (`OdmlSpeechProcessorTranscribe`, `OdmlSpeechProcessorFinishStream`, …) resolved at runtime with `dlsym`. The app's entitlements allow `DYLD_INSERT_LIBRARIES`, so `launch.sh` starts it with `shim/libfarsight.dylib` loaded first.
 
-1. **Speech recognition is replaced.** The shim interposes `dlsym` and wraps the transcription calls. The audio Foresight hands over (48 kHz float, one stream for the microphone and one for system audio) is resampled to 16 kHz, cut into phrases with Silero VAD, and each phrase is transcribed by Shenava Rizeh. Results go back in Foresight's own result format, so the app cannot tell the difference. See `shim/sensevoice_engine.c`.
+1. **Speech recognition is replaced.** The shim interposes `dlsym` and wraps the transcription calls. The audio Foresight hands over (48 kHz float, one stream for the microphone and one for system audio) is resampled to 16 kHz, cut into phrases with Silero VAD, and each phrase is transcribed by Shenava Koochik. Results go back in Foresight's own result format, so the app cannot tell the difference. See `shim/sensevoice_engine.c`.
 2. **The ASCII filter is lifted.** Foresight's Dart layer deletes every character outside printable ASCII from transcripts, which would erase all Persian. The shim rewrites that regular expression in memory (copy-on-write; the file on disk is unchanged) so only control characters are removed.
 3. **Persian text is cleaned up.** Shenava spells numbers out; `shim/persian_itn.c` turns well-formed spoken numbers into Persian digits (a lone «یک» stays a word, since it usually means "a"). `shim/persian_text.c` adds zero-width non-joiners («می‌شه», «طرح‌های») and fixes Arabic ي/ك. Each phrase is decoded with 0.35 s of audio before the detected start, so first syllables are not clipped. Tests: `shim/test/itn_test.sh`.
 
@@ -96,5 +96,5 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 ## Credits
 
 - Built on [foresight-zh](https://github.com/michaelpersonal/foresight-zh) by michaelpersonal, which worked out the injection approach for Chinese.
-- Persian speech model: [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) by Reza2kn (Apache-2.0).
+- Persian speech models: [Shenava Koochik v1.0](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) and [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) by Reza2kn (Apache-2.0).
 - Inference: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), [Silero VAD](https://github.com/snakers4/silero-vad) (MIT), [cJSON](https://github.com/DaveGamble/cJSON) (MIT).
