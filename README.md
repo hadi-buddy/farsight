@@ -9,6 +9,7 @@ Farsight adds **live Persian transcription** to [Google AI Edge Foresight](https
 - 🎙️ **Persian ASR, on-device** — [Shenava Rizeh](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx), a Persian FastConformer model, running on the CPU through [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx). Audio never leaves the machine.
 - 🔢 **Numbers as digits** — spoken numbers become Persian digits: «هزار و چهارصد و سه» → «۱۴۰۳».
 - 📝 **Persian meeting summaries** — when chat is routed to a local model, summaries of Persian meetings come back in Persian.
+- ↔️ **Persian, right-to-left UI** — Foresight ships a Persian translation; Farsight starts it in Persian, so the whole app is laid out right-to-left.
 - 🧩 **No patched app** — Foresight's files and Google's code signature stay untouched; launching Foresight normally still gives you the stock English app.
 
 > Unofficial. Not affiliated with or endorsed by Google. Contains no Google code or model weights.
@@ -55,7 +56,7 @@ To log every transcript for debugging: `FARSIGHT_TRACE=1 ./launch.sh`.
 ## Limitations
 
 - **Persian only.** English words inside Persian speech come out as Persian-script approximations. For an English meeting, open Foresight normally (without `launch.sh`).
-- **Left-to-right layout.** Letters join correctly, but Foresight aligns lines to the left and mixed Persian/English text can look out of order. The layout lives inside the compiled app.
+- **UI language.** `launch.sh` opens Foresight in Persian (right-to-left). Use `FARSIGHT_LANG=en ./launch.sh` for English or `FARSIGHT_LANG=system` to follow macOS. A few labels, such as "Start transcribing", are not translated by Google.
 - **Phrase by phrase.** Text arrives after each pause (about 0.6 s of silence), not word by word.
 - **Foresight updates** can move what the shim relies on. If Persian text disappears after an update, check `shim.log`; without Farsight the app keeps working in English.
 
@@ -65,7 +66,7 @@ Foresight is a Flutter app. Its Dart code reaches Google's transcription library
 
 1. **Speech recognition is replaced.** The shim interposes `dlsym` and wraps the transcription calls. The audio Foresight hands over (48 kHz float, one stream for the microphone and one for system audio) is resampled to 16 kHz, cut into phrases with Silero VAD, and each phrase is transcribed by Shenava Rizeh. Results go back in Foresight's own result format, so the app cannot tell the difference. See `shim/sensevoice_engine.c`.
 2. **The ASCII filter is lifted.** Foresight's Dart layer deletes every character outside printable ASCII from transcripts, which would erase all Persian. The shim rewrites that regular expression in memory (copy-on-write; the file on disk is unchanged) so only control characters are removed.
-3. **Numbers are normalized.** Shenava spells numbers out; `shim/persian_itn.c` turns well-formed spoken numbers into Persian digits. A lone «یک» stays a word, since it usually means "a". Tests: `shim/test/itn_test.sh`.
+3. **Persian text is cleaned up.** Shenava spells numbers out; `shim/persian_itn.c` turns well-formed spoken numbers into Persian digits (a lone «یک» stays a word, since it usually means "a"). `shim/persian_text.c` adds zero-width non-joiners («می‌شه», «طرح‌های») and fixes Arabic ي/ك. Each phrase is decoded with 0.35 s of audio before the detected start, so first syllables are not clipped. Tests: `shim/test/itn_test.sh`.
 
 If the Persian model is missing or fails to load, the shim falls back to SenseVoice (if installed) and then to Foresight's own English engine.
 
@@ -86,6 +87,7 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 | `shim/farsight.c` | `dlsym` interposition, transcription hooks, filter patch, engine selection |
 | `shim/sensevoice_engine.c` | VAD + speech model via sherpa-onnx (Persian or SenseVoice) |
 | `shim/persian_itn.c` | Spoken Persian numbers → digits |
+| `shim/persian_text.c` | ZWNJ and Persian letter cleanup |
 | `shim/chat_bridge.c` | Optional chat/summaries on a local server |
 | `setup-persian.sh` | Downloads the Persian engine |
 | `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |
