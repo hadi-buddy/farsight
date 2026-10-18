@@ -5,7 +5,7 @@
 // everything else as it is. A run follows Persian number grammar: components
 // joined by "و" in falling order, optionally scaled by هزار / میلیون / میلیارد.
 // Adjacent components without "و" ("دو سه", "a couple") end the run, so they are
-// not summed. A lone "یک" stays a word, since it is usually the article "a".
+// not summed. A lone «یک» («a») or «نه» («not») stays a word.
 
 #include "persian_itn.h"
 
@@ -150,7 +150,10 @@ char *persian_itn(const char *text) {
     long long v = 0;
     int used = parse_number(t, n, i, &v);
     if (o) out[o++] = ' ';
-    if (used > 0 && !(used == 1 && v == 1)) {
+    // A lone «یک» is usually the article "a" and a lone «نه» the word "not/no";
+    // leave both as words. Longer runs («نه هزار», «بیست و نه») are numbers.
+    int lone_word = used == 1 && (v == 1 || (v == 9 && t[i].len == 4 && memcmp(t[i].s, "نه", 4) == 0));
+    if (used > 0 && !lone_word) {
       o += put_digits(out + o, v);
       i += used;
     } else {

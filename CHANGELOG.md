@@ -2,6 +2,24 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Echo dedup, Persian summaries from Gemma, «نه» stays a word
+
+- **Context:** a real test (a video playing through the speakers) gave every sentence twice,
+  once as "Microphone" and once as "Remote" (system audio); phrases cut by the 15 s limit
+  ended in a wrong «.»; «نه» ("not") became «۹»; Foresight's summary came back in English.
+- **Change:**
+  - `shim/sensevoice_engine.c`: cross-stream dedup. Each phrase is compared, by word pairs
+    (single words like «و» match everything), with what the other stream said in the last
+    30 s. If ≥60 % of its pairs are there it is a repeat: dropped, or trimmed to its new
+    trailing words (3+). Repeats are still remembered for the other stream. On the test
+    transcript: 33 lines → 20, no content lost. Tuning: `dedup`, `dedup_window`, `dedup_overlap`.
+  - A phrase cut by `max_speech` (now 20 s) gets no final «.» (`persian_punctuate(text, complete)`).
+  - `shim/persian_itn.c`: a lone «نه» is left as a word, like «یک»; «بیست و نه», «نه هزار» still convert.
+  - `shim/chat_bridge.c`: when Gemma serves a request (bridge off or server down), a summary
+    request with a Persian transcript gets the "write in Persian" instruction appended to the
+    user message. The Persian share is now measured inside the transcript tags only.
+- **Status:** dedup tested on the real transcript, other parts unit-tested; to verify on macOS.
+
 ## 2026-10-18 — Punctuation
 
 - **Context:** with Koochik and ZWNJ the live test was accurate («در جلسه دیزاین امروز ما بررسی

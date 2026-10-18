@@ -126,6 +126,7 @@ static char *join_zwnj(const char *in) {
 // --- step 3: punctuation ----------------------------------------------------
 //
 // Each phrase ends at a pause of ~0.9 s, which is usually the end of a sentence.
+// A phrase cut by the max-length limit (complete = 0) gets no final «.».
 //   - question word at the start, or a tag question at the end -> «؟»
 //   - ends on a connector («که»، «و»، «ولی»، …) -> no mark, the sentence goes on
 //   - otherwise -> «.»
@@ -157,7 +158,7 @@ static size_t trailing_mark(const char *s, size_t len) {
   return 0;
 }
 
-char *persian_punctuate(const char *text) {
+char *persian_punctuate(const char *text, int complete) {
   if (!text) return NULL;
   size_t L = strlen(text);
   char *out = malloc(L * 2 + 16);
@@ -193,7 +194,7 @@ char *persian_punctuate(const char *text) {
   size_t lastl = wl[n - 1];
   if (!trailing_mark(last, lastl)) {
     int question = IN(w[0], wl[0], kQuestionStart) || (n >= 2 && IN(last, lastl, kQuestionEnd));
-    int cont = IN(last, lastl, kContinue);
+    int cont = !complete || IN(last, lastl, kContinue);
     if (question) {
       memcpy(out + o, "\xD8\x9F", 2);  // ؟
       o += 2;

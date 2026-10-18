@@ -182,6 +182,29 @@ static double script_share(const char *s, int want_cjk) {
   return letters ? (double)hit / letters : 0;
 }
 
+// Script share measured only inside the transcript tags, so a long English
+// prompt template around a short Persian transcript does not hide it.
+static double transcript_share(const char *s, int want_cjk) {
+  static const char *tags[] = {"meeting_transcript", "transcript_chunk", "new_transcript_section"};
+  for (size_t i = 0; i < 3; i++) {
+    char open[64], close[64];
+    snprintf(open, sizeof open, "<%s>", tags[i]);
+    snprintf(close, sizeof close, "</%s>", tags[i]);
+    const char *a = strstr(s, open);
+    if (!a) continue;
+    a += strlen(open);
+    const char *b = strstr(a, close);
+    size_t n = b ? (size_t)(b - a) : strlen(a);
+    char *inner = malloc(n + 1);
+    memcpy(inner, a, n);
+    inner[n] = 0;
+    double r = script_share(inner, want_cjk);
+    free(inner);
+    return r;
+  }
+  return script_share(s, want_cjk);
+}
+
 // Joins the text parts of a LiteRT-LM message's content (string or part array).
 static char *content_text(const cJSON *content) {
   if (cJSON_IsString(content)) return unspace_cjk(strdup(content->valuestring));
@@ -446,8 +469,8 @@ static void match_transcript_language(cJSON *msgs) {
       "Keep the template's markdown headings (such as \"# Overview\" and \"# Details\") and any "
       "required JSON keys or field names exactly as specified, in English.";
   const char *note, *lang;
-  if (script_share(t, 1) >= 0.3) note = note_zh, lang = "Chinese";
-  else if (script_share(t, 0) >= 0.3) note = note_fa, lang = "Persian";
+  if (transcript_share(t, 1) >= 0.3) note = note_zh, lang = "Chinese";
+  else if (transcript_share(t, 0) >= 0.3) note = note_fa, lang = "Persian";
   else return;
   cJSON *first = cJSON_GetArrayItem(msgs, 0);
   const cJSON *role = cJSON_GetObjectItemCaseSensitive(first, "role");
@@ -618,6 +641,49 @@ static int push_message(Conv *c, const char *msg_json) {
   return 1;
 }
 
+// When Gemma (Foresight's own model) handles a request, the app's English summary
+// prompt makes it answer in English even for a Persian transcript. Add the same
+// language instruction to the user message. Returns a new message JSON, or NULL
+// to send the original.
+static char *gemma_language_msg(const char *msg) {
+  if (!msg || (!strstr(msg, "<meeting_transcript>") && !strstr(msg, "<transcript_chunk>") &&
+               !strstr(msg, "<new_transcript_section>")))
+    return NULL;
+  cJSON *m = cJSON_Parse(msg);
+  if (!m) return NULL;
+  cJSON *content = cJSON_GetObjectItemCaseSensitive(m, "content");
+  char *text = content ? content_text(content) : NULL;
+  int fa = text && transcript_share(text, 0) >= 0.3;
+  free(text);
+  if (!fa) {
+    cJSON_Delete(m);
+    return NULL;
+  }
+  static const char note[] =
+      "\n\nLanguage: the transcript is in Persian (Farsi). Write all of your output in Persian (Farsi). "
+      "Keep the template's markdown headings (such as \"# Overview\" and \"# Details\") and any "
+      "required JSON keys or field names exactly as specified, in English.";
+  if (cJSON_IsString(content)) {
+    size_t n = strlen(content->valuestring) + sizeof note;
+    char *merged = malloc(n);
+    snprintf(merged, n, "%s%s", content->valuestring, note);
+    cJSON_ReplaceItemInObjectCaseSensitive(m, "content", cJSON_CreateString(merged));
+    free(merged);
+  } else if (cJSON_IsArray(content)) {
+    cJSON *part = cJSON_CreateObject();
+    cJSON_AddStringToObject(part, "type", "text");
+    cJSON_AddStringToObject(part, "text", note + 2);
+    cJSON_AddItemToArray(content, part);
+  } else {
+    cJSON_Delete(m);
+    return NULL;
+  }
+  char *out = cJSON_PrintUnformatted(m);
+  cJSON_Delete(m);
+  logf_("chat: Persian transcript -> asking Gemma for Persian output");
+  return out;
+}
+
 // ------------------------------------------------------------ replacements ---
 
 static void *my_create_v2(void *engine, const char *config_json) {
@@ -666,7 +732,11 @@ static void my_delete(void *conv) {
 
 static int my_send_stream(void *conv, const char *msg, stream_cb cb, void *ud) {
   Conv *c = find_conv(conv);
-  if (!c) return R.send_stream(conv, msg, cb, ud);
+  if (!c) {
+    // Kept alive (not freed): the engine may read the message after returning.
+    char *fa = gemma_language_msg(msg);
+    return R.send_stream(conv, fa ? fa : msg, cb, ud);
+  }
   if (!msg || !push_message(c, msg)) {
     cb(empty_chunk(), ud);
     return 0;
@@ -687,7 +757,12 @@ static int my_send_stream(void *conv, const char *msg, stream_cb cb, void *ud) {
 // Non-streaming variant: same streamed request, reply returned as one JSON string.
 static char *my_send(void *conv, const char *msg) {
   Conv *c = find_conv(conv);
-  if (!c) return R.send(conv, msg);
+  if (!c) {
+    char *fa = gemma_language_msg(msg);
+    char *r = R.send(conv, fa ? fa : msg);
+    free(fa);
+    return r;
+  }
   if (!msg || !push_message(c, msg)) return text_chunk("");
   Req *r = calloc(1, sizeof *r);
   r->conv = c;
@@ -746,7 +821,18 @@ void chat_bridge_init(const char *home, int trace) {
 }
 
 void *chat_bridge_wrap(const char *symbol, void *real) {
-  if (!g_url[0]) return NULL;
+  if (!g_url[0]) {
+    // Bridge off: still wrap sending, so Gemma gets the Persian instruction.
+    if (strcmp(symbol, "litert_lm_conversation_send_message_stream") == 0) {
+      R.send_stream = (send_stream_fn)real;
+      return (void *)my_send_stream;
+    }
+    if (strcmp(symbol, "litert_lm_conversation_send_message") == 0) {
+      R.send = (send_fn)real;
+      return (void *)my_send;
+    }
+    return NULL;
+  }
 #define HOOK(name, field, fn)                \
   if (strcmp(symbol, name) == 0) {           \
     R.field = (__typeof__(R.field))real;     \

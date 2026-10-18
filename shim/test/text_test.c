@@ -33,7 +33,7 @@ int main(void) {
   check("API ها", "API ها");
   check("", "");
   // punctuation
-#define P(in, want) do { char *g = persian_punctuate(in); if (strcmp(g, want)) { printf("FAIL punct\n  in:   %s\n  want: %s\n  got:  %s\n", in, want, g); fails++; } free(g); } while (0)
+#define P(in, want) do { char *g = persian_punctuate(in, 1); if (strcmp(g, want)) { printf("FAIL punct\n  in:   %s\n  want: %s\n  got:  %s\n", in, want, g); fails++; } free(g); } while (0)
   P("تا جایی که می" Z "شه در موردشون صحبت کرد", "تا جایی که می" Z "شه در موردشون صحبت کرد.");
   P("در جلسه دیزاین امروز ما بررسی می" Z "کنیم که", "در جلسه دیزاین امروز ما بررسی می" Z "کنیم که");
   P("چرا این طرح رو انتخاب کردیم", "چرا این طرح رو انتخاب کردیم؟");
@@ -43,6 +43,8 @@ int main(void) {
   P("سلام", "سلام.");
   P("واقعا؟", "واقعا؟");
   P("", "");
+  { char *g = persian_punctuate("یک اثر هنری به عنوان یک شیء فیزیکی", 0);
+    if (strcmp(g, "یک اثر هنری به عنوان یک شیء فیزیکی")) { printf("FAIL cut phrase got %s\n", g); fails++; } free(g); }
   if (!fails) printf("text: all passed\n");
   return fails != 0;
 }
