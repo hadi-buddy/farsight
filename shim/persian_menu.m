@@ -58,6 +58,22 @@ static NSString *CurrentLanguage(void) {
   return (saved.length > 0) ? saved : @"fa";
 }
 
+// Foresight's own UI strings turned out not to follow -AppleLanguages at all --
+// they come from wherever Foresight keys its translated content off of, and
+// that's this cached locale (found by inspecting
+// ~/Library/Preferences/<bundle-id>.plist and confirmed by writing it
+// directly and watching the UI switch). It's a Firebase SDK key by name, but
+// Foresight itself is evidently reading it for this. -AppleLanguages still
+// gets passed too, for anything in the process that does follow the normal
+// macOS mechanism (e.g. our own injected "Language" menu's text direction).
+static void SetFirebaseLocale(NSString *lang) {
+  NSString *bundleID = NSRunningApplication.currentApplication.bundleIdentifier;
+  if (!bundleID) return;
+  CFPreferencesSetAppValue(CFSTR("com.firebase.instanceid.user_defaults.locale"), (__bridge CFStringRef)lang,
+                            (__bridge CFStringRef)bundleID);
+  CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
+}
+
 @interface FarsightMenuController : NSObject
 @property(nonatomic, strong) NSMenuItem *faItem;
 @property(nonatomic, strong) NSMenuItem *enItem;
@@ -69,6 +85,13 @@ static NSString *CurrentLanguage(void) {
 @implementation FarsightMenuController
 
 - (void)installMenu {
+  // Self-heals every launch, not just on a menu click: if this process somehow
+  // started (plain Dock launch caught by watcher.sh, a stale cached value from
+  // before SetFirebaseLocale existed, etc.) with Foresight's cached locale out
+  // of sync with our saved choice, fix it now rather than leave the UI in the
+  // wrong language until the user happens to click the menu again.
+  SetFirebaseLocale(CurrentLanguage());
+
   NSMenu *mainMenu = NSApp.mainMenu;
   if (!mainMenu) {
     logf_("menu: no mainMenu yet, Language menu not added");
@@ -130,6 +153,7 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
     logf_("menu: failed to write lang file: %s", err.localizedDescription.UTF8String);
     return;
   }
+  SetFirebaseLocale(lang);
   [self refreshChecks];
   [self relaunchWithLanguage:lang];
 }
