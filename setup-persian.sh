@@ -45,5 +45,13 @@ if [[ ! -f "$DEST/sensevoice/silero_vad.onnx" ]]; then
   echo "downloading Silero VAD"
   fetch "$REL/asr-models/silero_vad.onnx" "$DEST/sensevoice/silero_vad.onnx"
 fi
+# Vazirmatn (SIL OFL 1.1), used for Persian text in the app (shim/persian_font.c).
+VZ=https://raw.githubusercontent.com/rastikerdar/vazirmatn/6e553e33489a8f9dfaccc76860a2e3f3c1e66de7
+mkdir -p "$DEST/fonts"
+echo "downloading Vazirmatn font"
+for w in Thin ExtraLight Light Regular Medium SemiBold Bold ExtraBold Black; do
+  fetch "$VZ/fonts/ttf/Vazirmatn-$w.ttf" "$DEST/fonts/Vazirmatn-$w.ttf"
+done
+[[ -s "$DEST/fonts/OFL.txt" ]] || curl -fsL --max-time 30 -o "$DEST/fonts/OFL.txt" "$VZ/OFL.txt" || true
 rm -f "${0:A:h}/engine"  # no override: the shim defaults to persian
 du -sh "$DEST"
