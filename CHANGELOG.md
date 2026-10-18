@@ -2,6 +2,17 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Punctuation
+
+- **Context:** with Koochik and ZWNJ the live test was accurate («در جلسه دیزاین امروز ما بررسی
+  می‌کنیم که فیدبک‌ها همیشه بهش پرداخته بشه»), but Shenava outputs no punctuation.
+- **Change:** `persian_punctuate` in `shim/persian_text.c`, applied per phrase (a phrase ends at a
+  ~0.9 s pause): «؟» after a leading question word (چرا، چطور، کی، …) or a tag («… نه»); no mark
+  when the phrase ends on a connector (که، و، ولی، به، …) since the sentence continues; «.»
+  otherwise; «،» before اما/ولی/چون/یعنی after two or more words. `punctuation = 0` in the
+  tuning file turns it off. Tests in `shim/test/text_test.c`.
+- **Status:** unit tests pass; to verify on macOS.
+
 ## 2026-10-18 — Tuning file, postroll, phrase audio dump
 
 - **Context:** recognition still makes mistakes with Koochik; tuning needs real examples and

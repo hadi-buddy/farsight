@@ -19,6 +19,9 @@ postroll = 0.15
 # CPU threads for the speech model.
 threads = 2
 
+# 1 = end each phrase with «.» or «؟» and put «،» before اما/ولی/چون/یعنی. 0 = no punctuation.
+punctuation = 1
+
 # 1 = save every phrase as a WAV file plus its text in ~/Library/Logs/farsight/audio/
 # (index.tsv), to compare what was said with what was written.
 dump = 0

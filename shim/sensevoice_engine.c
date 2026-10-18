@@ -38,10 +38,11 @@
 //   postroll       0.15   audio (s) added after each phrase
 //   threads        2      CPU threads for the speech model
 //   dump           0      1 = save each phrase as WAV + text in ~/Library/Logs/farsight/audio/
+//   punctuation    1      0 = no «.» «؟» «،» added to phrases
 static struct {
   float vad_threshold, min_silence, min_speech, max_speech, preroll, postroll;
-  int threads, dump;
-} T = {0.5f, -1, 0.25f, 15.0f, 0.35f, 0.15f, 2, 0};
+  int threads, dump, punctuation;
+} T = {0.5f, -1, 0.25f, 15.0f, 0.35f, 0.15f, 2, 0, 1};
 static char g_dump_dir[1100];
 static int g_dump_n;
 
@@ -191,6 +192,7 @@ static void load_tuning(const char *home) {
       else if (!strcmp(key, "postroll")) T.postroll = v < 0 ? 0 : v > 1.0f ? 1.0f : v;
       else if (!strcmp(key, "threads")) T.threads = v < 1 ? 1 : v > 8 ? 8 : (int)v;
       else if (!strcmp(key, "dump")) T.dump = v != 0;
+      else if (!strcmp(key, "punctuation")) T.punctuation = v != 0;
       else logf_("tuning: unknown key %s", key);
     }
     fclose(f);
@@ -296,13 +298,17 @@ static void ring_push(Stream *s, const float *x, int n) {
   s->fed += n;
 }
 
-// Persian post-processing: spoken numbers -> digits, then orthography (ZWNJ, ی/ک).
+// Persian post-processing: spoken numbers -> digits, orthography (ZWNJ, ی/ک),
+// then punctuation (unless "punctuation = 0" in the tuning file).
 static char *postprocess(const char *raw) {
   if (g_lang != SV_LANG_PERSIAN) return strdup(raw);
   char *a = persian_itn(raw);
   char *b = persian_fix(a);
   free(a);
-  return b;
+  if (!T.punctuation) return b;
+  char *c = persian_punctuate(b);
+  free(b);
+  return c;
 }
 
 // Transcribes every finished VAD segment; returns the number of results written.
