@@ -2,6 +2,22 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Watcher poll: 1s → 0.5s, via a persistent loop
+
+- **Context:** asked for the unshimmed-launch flash to be cut to 500ms. launchd's `StartInterval` key
+  is whole seconds only (no fractional values) — `1` was already as fine-grained as that mechanism
+  allows, so getting below a second needed a different approach, not a smaller number in the plist.
+- **Change:**
+  - `watcher.sh`: restructured from a script launchd re-invokes periodically into a persistent `while
+    true` loop with `sleep 0.5` between checks, run once and kept alive. Every `exit 0` "nothing to do"
+    path became `continue` (the loop must keep running); the rate-limit and 2s-settle logic are
+    unchanged.
+  - `install-watcher.sh`: dropped `StartInterval`, added `KeepAlive` (so launchd restarts the loop if
+    it ever dies) alongside the existing `RunAtLoad`.
+- **Status:** written, not yet verified on macOS. Re-run `./install-watcher.sh` to replace the old
+  periodic LaunchAgent with this one — launchd won't pick up the ProgramArguments/KeepAlive change on
+  its own.
+
 ## 2026-10-18 — Faster watcher poll (5s → 1s)
 
 - **Context:** opening Foresight directly (Dock/Spotlight, not through `launch.sh`) starts it without
