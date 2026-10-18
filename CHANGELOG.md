@@ -2,6 +2,23 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Faster watcher poll (5s → 1s)
+
+- **Context:** opening Foresight directly (Dock/Spotlight, not through `launch.sh`) starts it without
+  the shim; `watcher.sh` catches that and relaunches it with the shim, which is correct but visible —
+  the user sees Foresight open, then restart itself a few seconds later with the Language menu
+  appearing only after that. The real fix (an `LSEnvironment` entry in Foresight.app's own
+  `Info.plist`, so the OS sets `DYLD_INSERT_LIBRARIES` on every launch with zero restart) was
+  considered and explicitly declined: it edits a signed Google binary on disk, risks invalidating its
+  code signature (possible "Foresight is damaged" failure, worse than today's visible-but-working
+  restart), and gets wiped by every Foresight update. Not worth that risk for a cosmetic fix.
+- **Change:** `install-watcher.sh`: `StartInterval` 5 → 1. Cuts how long an unshimmed launch is visible
+  before `watcher.sh` catches it and relaunches with the shim; doesn't eliminate the restart, just
+  shortens it. `watcher.sh`'s own 2 s settle delay (avoids racing a relaunch already in progress) is
+  unchanged — it's a correctness guard, not a cosmetic one.
+- **Status:** written, not yet verified on macOS; run `./install-watcher.sh` again to pick up the new
+  interval (a previously-installed LaunchAgent won't update itself).
+
 ## 2026-10-18 — Language menu: reliable relaunch via NSWorkspace; left-aligned items
 
 - **Context:** the NSTask+`launch.sh` relaunch (previous entry) wasn't restarting Foresight for the
