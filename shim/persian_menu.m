@@ -155,6 +155,34 @@ static void SetFirebaseLocale(NSString *lang) {
   if (readback) CFRelease(readback);
 }
 
+// -AppleLanguages/-AppleLocale passed as a launch *argument* only populates
+// NSUserDefaults' process-local "argument domain" -- it does not survive
+// Foresight re-executing itself shortly after a cold launch (confirmed: a
+// second, unrelated-looking Foresight process with no argv at all, but the
+// same DYLD_INSERT_LIBRARIES from our *environment*, consistently appears a
+// few seconds after every launch, including a menu-triggered relaunch).
+// Environment variables survive that re-exec; command-line arguments don't.
+// Writing the real, on-disk `AppleLanguages`/`AppleLocale` preference under
+// Foresight's own bundle ID means every process -- including the re-exec'd
+// one -- reads the right language straight from disk, regardless of its argv.
+static void SetAppleLanguagesPref(NSString *lang) {
+  NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
+  if (!bundleID) return;
+  if ([lang isEqualToString:@"system"]) {
+    CFPreferencesSetAppValue(CFSTR("AppleLanguages"), NULL, (__bridge CFStringRef)bundleID);
+    CFPreferencesSetAppValue(CFSTR("AppleLocale"), NULL, (__bridge CFStringRef)bundleID);
+  } else {
+    NSArray<NSString *> *langs = @[ lang ];
+    CFPreferencesSetAppValue(CFSTR("AppleLanguages"), (__bridge CFArrayRef)langs, (__bridge CFStringRef)bundleID);
+    if ([lang isEqualToString:@"fa"]) {
+      CFPreferencesSetAppValue(CFSTR("AppleLocale"), CFSTR("fa_IR"), (__bridge CFStringRef)bundleID);
+    } else {
+      CFPreferencesSetAppValue(CFSTR("AppleLocale"), NULL, (__bridge CFStringRef)bundleID);
+    }
+  }
+  CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
+}
+
 @interface FarsightMenuController : NSObject
 @property(nonatomic, strong) NSMenuItem *faItem;
 @property(nonatomic, strong) NSMenuItem *enItem;
@@ -228,6 +256,7 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
     return;
   }
   SetFirebaseLocale(lang);
+  SetAppleLanguagesPref(lang);
   [self refreshChecks];
   [self relaunchWithLanguage:lang];
 }
@@ -290,6 +319,7 @@ void persian_menu_init(const char *home) {
   snprintf(g_dylib_path, sizeof g_dylib_path, "%s/tools/farsight/shim/libfarsight.dylib", home);
   DisableFutureStateSaving();             // stops future saves; doesn't fix *this* launch -- see its comment
   SetFirebaseLocale(CurrentLanguage());  // as early as possible -- see SetFirebaseLocale's comment
+  SetAppleLanguagesPref(CurrentLanguage());  // survives Foresight's own self-relaunch -- see its comment
   g_controller = [FarsightMenuController new];
   [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidFinishLaunchingNotification
                                                      object:nil
