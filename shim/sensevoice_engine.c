@@ -33,16 +33,21 @@
 //   vad_threshold  0.5    speech probability that starts a phrase (lower = more sensitive)
 //   min_silence    0.9    pause (s) that ends a phrase (Persian; 0.6 for other engines)
 //   min_speech     0.25   shortest phrase (s)
-//   max_speech     15     longest phrase (s) before a forced break
+//   max_speech     20     longest phrase (s) before a forced break
 //   preroll        0.35   audio (s) added before each phrase
 //   postroll       0.15   audio (s) added after each phrase
 //   threads        2      CPU threads for the speech model
 //   dump           0      1 = save each phrase as WAV + text in ~/Library/Logs/farsight/audio/
 //   punctuation    1      0 = no «.» «؟» «،» added to phrases
+//   dedup          1      drop a phrase that repeats what the other stream (mic vs. system
+//                         audio) just said: speakers picked up by the microphone
+//   dedup_window   30     how far back (s) to look in the other stream
+//   dedup_overlap  0.6    share of a phrase's word pairs found there that counts as a repeat
 static struct {
   float vad_threshold, min_silence, min_speech, max_speech, preroll, postroll;
-  int threads, dump, punctuation;
-} T = {0.5f, -1, 0.25f, 15.0f, 0.35f, 0.15f, 2, 0, 1};
+  int threads, dump, punctuation, dedup;
+  float dedup_window, dedup_overlap;
+} T = {0.5f, -1, 0.25f, 20.0f, 0.35f, 0.15f, 2, 0, 1, 1, 30.0f, 0.6f};
 static char g_dump_dir[1100];
 static int g_dump_n;
 
@@ -168,9 +173,9 @@ static void *load_thread(void *arg) {
   pthread_cond_broadcast(&g_cv);
   pthread_mutex_unlock(&g_mu);
   logf_("tuning: vad_threshold=%.2f min_silence=%.2f min_speech=%.2f max_speech=%.1f preroll=%.2f "
-        "postroll=%.2f threads=%d dump=%d",
+        "postroll=%.2f threads=%d dump=%d punctuation=%d dedup=%d/%.0fs/%.2f",
         T.vad_threshold, g_vad_cfg.silero_vad.min_silence_duration, T.min_speech, T.max_speech, T.preroll,
-        T.postroll, T.threads, T.dump);
+        T.postroll, T.threads, T.dump, T.punctuation, T.dedup, T.dedup_window, T.dedup_overlap);
   logf_("asr (%s): %s", g_lang == SV_LANG_PERSIAN ? "persian" : "sensevoice", ok ? "ready" : "unavailable");
   return NULL;
 }
@@ -193,6 +198,9 @@ static void load_tuning(const char *home) {
       else if (!strcmp(key, "threads")) T.threads = v < 1 ? 1 : v > 8 ? 8 : (int)v;
       else if (!strcmp(key, "dump")) T.dump = v != 0;
       else if (!strcmp(key, "punctuation")) T.punctuation = v != 0;
+      else if (!strcmp(key, "dedup")) T.dedup = v != 0;
+      else if (!strcmp(key, "dedup_window")) T.dedup_window = v < 1 ? 1 : v > 120 ? 120 : v;
+      else if (!strcmp(key, "dedup_overlap")) T.dedup_overlap = v < 0.2f ? 0.2f : v > 1 ? 1 : v;
       else logf_("tuning: unknown key %s", key);
     }
     fclose(f);
@@ -300,19 +308,154 @@ static void ring_push(Stream *s, const float *x, int n) {
 
 // Persian post-processing: spoken numbers -> digits, orthography (ZWNJ, ی/ک),
 // then punctuation (unless "punctuation = 0" in the tuning file).
-static char *postprocess(const char *raw) {
+static char *postprocess(const char *raw, int complete) {
   if (g_lang != SV_LANG_PERSIAN) return strdup(raw);
   char *a = persian_itn(raw);
   char *b = persian_fix(a);
   free(a);
   if (!T.punctuation) return b;
-  char *c = persian_punctuate(b);
+  char *c = persian_punctuate(b, complete);
   free(b);
   return c;
 }
 
+// ---- duplicate phrases across streams --------------------------------------
+// Foresight records the microphone and the system audio as two streams. Without
+// headphones the microphone also hears the speakers, so the same sentence comes
+// back twice, slightly differently. A phrase whose word pairs are mostly in what
+// the other stream said in the last dedup_window seconds is dropped.
+
+#define RECENT 64
+static struct {
+  int stream;
+  double t;
+  char *text;
+} g_recent[RECENT];
+static int g_recent_n;
+
+static double now_s(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONOTONIC, &ts);
+  return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+// Normalizes one word: drops punctuation and ZWNJ so «می‌شه،» == «میشه».
+static void norm_word(const char *p, size_t len, char *out, size_t cap) {
+  size_t o = 0;
+  for (size_t i = 0; i < len;) {
+    const unsigned char *u = (const unsigned char *)p + i;
+    if (i + 2 < len + 0 && u[0] == 0xE2 && u[1] == 0x80 && u[2] == 0x8C) { i += 3; continue; }  // ZWNJ
+    if (i + 1 < len && u[0] == 0xD8 && (u[1] == 0x8C || u[1] == 0x9F || u[1] == 0x9B)) { i += 2; continue; }
+    if (strchr(".,?!:;", p[i])) { i++; continue; }
+    if (o + 1 < cap) out[o++] = p[i];
+    i++;
+  }
+  out[o] = 0;
+}
+
+typedef struct {
+  const char *s;  // original token (with punctuation)
+  size_t len;
+  char w[96];     // normalized
+} Word;
+
+static int split_words(const char *text, Word *out, int max) {
+  int n = 0;
+  for (const char *p = text; *p && n < max;) {
+    while (*p == ' ') p++;
+    if (!*p) break;
+    const char *q = p;
+    while (*q && *q != ' ') q++;
+    out[n].s = p, out[n].len = (size_t)(q - p);
+    norm_word(p, out[n].len, out[n].w, sizeof out[n].w);
+    if (out[n].w[0]) n++;
+    p = q;
+  }
+  return n;
+}
+
+// Checks a phrase against what the other stream said recently. Returns NULL to
+// keep the phrase as is, "" to drop it, or the new part of a partly repeated
+// phrase (malloc'ed): its trailing words that the other stream did not say.
+static char *dedup(int stream, const char *text) {
+  if (!T.dedup || !text) return NULL;
+  static Word w[160], other[1200];
+  int nw = split_words(text, w, 160);
+  if (nw == 0) return NULL;
+  double t = now_s();
+  double window = nw < 3 ? 8.0 : T.dedup_window;  // short phrases: only very recent echoes
+  int no = 0;
+  for (int i = 0; i < g_recent_n && no < 1200; i++) {
+    if (g_recent[i].stream == stream || t - g_recent[i].t > window) continue;
+    no += split_words(g_recent[i].text, other + no, 1200 - no);
+  }
+  if (no == 0) return NULL;
+  if (nw == 1) {
+    for (int j = 0; j < no; j++)
+      if (!strcmp(w[0].w, other[j].w)) return strdup("");
+    return NULL;
+  }
+  // Word pairs, not single words: common words («و», «به», «که») would otherwise
+  // make unrelated phrases look alike. A word in a matched pair is "covered".
+  static unsigned char covered[160];
+  memset(covered, 0, sizeof covered);
+  int pairs = nw - 1, hit = 0;
+  for (int i = 0; i < pairs; i++)
+    for (int j = 0; j + 1 < no; j++)
+      if (!strcmp(w[i].w, other[j].w) && !strcmp(w[i + 1].w, other[j + 1].w)) {
+        covered[i] = covered[i + 1] = 1;
+        hit++;
+        break;
+      }
+  if (hit == 0) return NULL;
+  double share = (double)hit / pairs;
+  if (nw < 3) return share >= 0.999 ? strdup("") : NULL;
+  if (share < T.dedup_overlap) return NULL;
+  // Mostly a repeat. The other stream usually just hasn't reached the end yet,
+  // so new content is at the end: keep the trailing words after the last
+  // repeated stretch (a lone stray pair inside them is tolerated) if 3 or more.
+  int from = nw, i = nw - 1;
+  while (i >= 0) {
+    if (!covered[i]) {
+      from = i--;
+      continue;
+    }
+    // A single stray pair («آقای دکتر») between new words is noise, not a repeat.
+    int run = 0;
+    while (i - run >= 0 && covered[i - run]) run++;
+    if (run <= 2 && i - run - 1 >= 0 && !covered[i - run] && !covered[i - run - 1]) {
+      i -= run;
+      continue;
+    }
+    break;
+  }
+  size_t cap = strlen(text) + 8, o = 0;
+  char *out = malloc(cap);
+  if (nw - from >= 3) {
+    for (int k = from; k < nw; k++) {
+      if (o) out[o++] = ' ';
+      memcpy(out + o, w[k].s, w[k].len);
+      o += w[k].len;
+    }
+  }
+  out[o] = 0;
+  return out;
+}
+
+static void remember(int stream, const char *text) {
+  if (g_recent_n == RECENT) {
+    free(g_recent[0].text);
+    memmove(g_recent, g_recent + 1, sizeof g_recent[0] * (RECENT - 1));
+    g_recent_n--;
+  }
+  g_recent[g_recent_n].stream = stream;
+  g_recent[g_recent_n].t = now_s();
+  g_recent[g_recent_n].text = strdup(text);
+  g_recent_n++;
+}
+
 // Transcribes every finished VAD segment; returns the number of results written.
-static int drain(Stream *s, SvResult *out, int max_out) {
+static int drain(int stream, Stream *s, SvResult *out, int max_out) {
   int n = 0;
   while (!p_SherpaOnnxVoiceActivityDetectorEmpty(s->vad)) {
     const SherpaOnnxSpeechSegment *seg = p_SherpaOnnxVoiceActivityDetectorFront(s->vad);
@@ -339,11 +482,24 @@ static int drain(Stream *s, SvResult *out, int max_out) {
       p_SherpaOnnxDecodeOfflineStream(g_rec, os);
       const SherpaOnnxOfflineRecognizerResult *r = p_SherpaOnnxGetOfflineStreamResult(os);
       if (r && r->text && r->text[0]) {
-        out[n].text = postprocess(r->text);
-        if (T.dump) dump_phrase(audio, len, out[n].text);
-        out[n].start_us = (long long)(seg->start - pad) * 1000000 / VAD_RATE;
-        out[n].end_us = (long long)(seg->start + seg->n) * 1000000 / VAD_RATE;
-        n++;
+        // A phrase as long as max_speech was cut by the limit, not by a pause.
+        int complete = seg->n < (int)((T.max_speech - 0.3f) * VAD_RATE);
+        char *text = postprocess(r->text, complete);
+        if (T.dump) dump_phrase(audio, len, text);
+        char *rest = dedup(stream, text);
+        remember(stream, text);  // repeats still count as said, for the other stream
+        if (rest) {
+          logf_("dedup: stream %d repeat%s: %s", stream, rest[0] ? ", kept new part" : " dropped", text);
+          free(text);
+          text = rest[0] ? rest : NULL;
+          if (!text) free(rest);
+        }
+        if (text) {
+          out[n].text = text;
+          out[n].start_us = (long long)(seg->start - pad) * 1000000 / VAD_RATE;
+          out[n].end_us = (long long)(seg->start + seg->n) * 1000000 / VAD_RATE;
+          n++;
+        }
       }
       if (r) p_SherpaOnnxDestroyOfflineRecognizerResult(r);
       p_SherpaOnnxDestroyOfflineStream(os);
@@ -365,7 +521,7 @@ int sv_push(int stream, const float *samples, int n, SvResult *out, int max_out)
     p_SherpaOnnxVoiceActivityDetectorAcceptWaveform(s->vad, ro->samples, ro->n);
   }
   if (ro) p_SherpaOnnxLinearResamplerResampleFree(ro);
-  int got = drain(s, out, max_out);
+  int got = drain(stream, s, out, max_out);
   pthread_mutex_unlock(&g_mu);
   return got;
 }
@@ -375,7 +531,7 @@ int sv_finish(int stream, SvResult *out, int max_out) {
   pthread_mutex_lock(&g_mu);
   Stream *s = get_stream(stream);
   p_SherpaOnnxVoiceActivityDetectorFlush(s->vad);
-  int got = drain(s, out, max_out);
+  int got = drain(stream, s, out, max_out);
   // The next session starts from zero: timestamps are relative to stream start.
   p_SherpaOnnxVoiceActivityDetectorReset(s->vad);
   p_SherpaOnnxLinearResamplerReset(s->resampler);

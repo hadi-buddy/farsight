@@ -32,6 +32,9 @@ int main(void) {
   check("من و تو", "من و تو");
   check("ده و", "۱۰ و");
   check("جلسه ی شماره ی هفت", "جلسه ی شماره ی ۷");
+  check("یک اثر هنری نه به عنوان یک شیء", "یک اثر هنری نه به عنوان یک شیء");
+  check("بیست و نه", "۲۹");
+  check("نه هزار", "۹۰۰۰");
   check("", "");
   check("hello world", "hello world");
   if (!fails) printf("all passed\n");

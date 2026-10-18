@@ -9,7 +9,7 @@ min_silence = 0.9
 
 # Shortest phrase (s) and longest phrase (s) before a forced break.
 min_speech = 0.25
-max_speech = 15
+max_speech = 20
 
 # Extra audio (s) given to the model before / after each phrase, so first and last
 # syllables are not clipped.
@@ -21,6 +21,14 @@ threads = 2
 
 # 1 = end each phrase with «.» or «؟» and put «،» before اما/ولی/چون/یعنی. 0 = no punctuation.
 punctuation = 1
+
+# Without headphones the microphone also hears the speakers, so the same sentence comes
+# back twice (microphone + system audio). 1 = drop the repeat (keeping any new words at
+# its end); 0 = keep both.
+dedup = 1
+# How far back (s) to look for the repeat, and what share of word pairs counts as one.
+dedup_window = 30
+dedup_overlap = 0.6
 
 # 1 = save every phrase as a WAV file plus its text in ~/Library/Logs/farsight/audio/
 # (index.tsv), to compare what was said with what was written.
