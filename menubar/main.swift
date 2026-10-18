@@ -29,10 +29,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   var enItem: NSMenuItem!
 
   func applicationDidFinishLaunching(_ notification: Notification) {
+    FileHandle.standardError.write("farsight-menubar: launched, creating status item\n".data(using: .utf8)!)
     statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     if let button = statusItem.button {
-      button.image = NSImage(systemSymbolName: "globe", accessibilityDescription: "Farsight language")
-      button.image?.isTemplate = true
+      // A text title is the reliable fallback: if the SF Symbol fails to load
+      // for any reason, an empty image still leaves a visible, clickable item.
+      button.title = "FA"
+      if let icon = NSImage(systemSymbolName: "globe", accessibilityDescription: "Farsight language") {
+        icon.isTemplate = true
+        button.image = icon
+        button.imagePosition = .imageOnly
+      }
     }
 
     let menu = NSMenu()
@@ -50,6 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     statusItem.menu = menu
     refreshCheckmarks()
+    FileHandle.standardError.write("farsight-menubar: status item set up, button present: \(statusItem.button != nil)\n".data(using: .utf8)!)
   }
 
   func refreshCheckmarks() {
