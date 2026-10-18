@@ -2,7 +2,9 @@
 # Launches Foresight with the farsight (Persian) transcription shim. Restarts it if it is already running.
 # FARSIGHT_TRACE=1 launch.sh  -> log every ODML call and transcript result to ~/Library/Logs/farsight/shim.log
 # UI language: Persian (right-to-left) by default. FARSIGHT_LANG=en launch.sh for English,
-#              FARSIGHT_LANG=system to follow the macOS language.
+#              FARSIGHT_LANG=system to follow the macOS language. Without FARSIGHT_LANG set,
+#              falls back to ~/tools/farsight/lang (written by the menubar switcher, see
+#              menubar/main.swift), then to fa.
 # Summary headings: Persian by default; FARSIGHT_HEADINGS=en launch.sh keeps "Overview"/"Details".
 # Font: Persian text uses Vazirmatn when installed; FARSIGHT_FONT=system launch.sh keeps the macOS font.
 SHIM="${0:A:h}/shim/libfarsight.dylib"
@@ -16,7 +18,8 @@ env_args=(--env "DYLD_INSERT_LIBRARIES=$SHIM")
 [[ -n "$FARSIGHT_FONT" ]] && env_args+=(--env "FARSIGHT_FONT=$FARSIGHT_FONT")
 [[ -n "$FARSIGHT_HEADINGS" ]] && env_args+=(--env "FARSIGHT_HEADINGS=$FARSIGHT_HEADINGS")
 [[ -n "$FARSIGHT_GEMMA_SAMPLING" ]] && env_args+=(--env "FARSIGHT_GEMMA_SAMPLING=$FARSIGHT_GEMMA_SAMPLING")
-lang=${FARSIGHT_LANG:-fa}
+saved_lang=$(cat "$HOME/tools/farsight/lang" 2>/dev/null)
+lang=${FARSIGHT_LANG:-${saved_lang:-fa}}
 app_args=()
 case $lang in
   system) ;;

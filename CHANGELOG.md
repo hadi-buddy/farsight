@@ -2,6 +2,44 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Menu-bar language switcher; confirmed Foresight's UI can't be safely translated
+
+- **Context:** asked to translate Foresight's remaining English labels ("Start transcribing", "Live
+  Q&A", …) to Persian. Investigated on the maintainer's Mac: `fa.lproj`/`Localizable.strings` don't
+  exist anywhere in the app bundle (confirmed with `find`/`plutil` — these labels are plain Swift/Dart
+  string literals, not looked up through any localization table). The app is a Flutter app
+  (`Powered by Flutter`, Dart/Skia error strings throughout the binary, `FlutterMacOS.framework`
+  present) hosted in a thin native shell, not SwiftUI as first assumed. Checked every CoreText symbol
+  `FlutterMacOS.framework`'s engine actually imports (`dyld_info -imports`, since `nm -gU` silently
+  misses chained-fixup imports on this binary — verified against `CTFontCreateForStringWithLanguage`,
+  the symbol `persian_font.c` already interposes successfully, as a sanity check): only font-selection
+  and glyph-metric calls (`CTFontCreateForStringWithLanguage`, `CTFontGetGlyphsForCharacters`,
+  `CTFontDrawGlyphs`, …), no `CTLineCreateWithAttributedString`/`CTTypesetter*`/`CTFrame*`/`CTRun*`.
+  Skia does its own text shaping and only asks CoreText "which font for this (unchanged) text" and
+  "draw these already-decided glyphs" — by the time any CoreText call happens the text content and
+  layout are fixed, unlike `persian_font.c`'s font swap (which only changes *which font* draws an
+  *unchanged* string, a much narrower problem). The remaining option — patching literal strings inside
+  the Dart AOT snapshot (`App.framework`) — is a different order of complexity/risk than anything else
+  in this shim and was not attempted.
+- **Change:** since Foresight's own UI can't be translated, made the *existing* `FARSIGHT_LANG`
+  Persian/English toggle (previously terminal-only) reachable without a terminal:
+  - `menubar/main.swift` (new): a standalone macOS status-bar app (`NSStatusItem`, `.accessory`
+    activation policy so it has no Dock icon), independent of Foresight's own process — never touches
+    its binary or menu. Two items, فارسی/English; picking one writes the choice to
+    `~/tools/farsight/lang` and relaunches Foresight through `launch.sh`.
+  - `launch.sh`: `lang` now falls back to `~/tools/farsight/lang` when `FARSIGHT_LANG` isn't set
+    (before falling back to `fa`), so the menu-bar choice persists across logins/relaunches, including
+    the existing `watcher.sh` LaunchAgent's own relaunches.
+  - `menubar/build.sh`, `install-menubar.sh` (new): build and LaunchAgent install/uninstall, mirroring
+    `watcher.sh`/`install-watcher.sh`'s existing pattern exactly.
+  - `README.md`/`README_fa.md`: documented under "UI language".
+- **Not changed:** no file under `shim/` touched; this is fully independent of the shim and the
+  transcription/chat pipeline.
+- **Status:** `menubar/main.swift` written and reviewed, not yet built/run (needs `swiftc` on macOS;
+  not available in this environment). To verify: `menubar/build.sh`, `./install-menubar.sh`, click
+  both menu items, confirm Foresight relaunches in the right language each time, confirm the choice
+  survives a Mac restart.
+
 ## 2026-10-18 — Jalali date on Persian summaries
 
 - **Context:** Persian summaries had no date at all; the user has to be able to tell, from the
