@@ -12,8 +12,8 @@ cat > "$PLIST" <<PLIST
 <dict>
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key><array><string>$DIR/watcher.sh</string></array>
-  <key>StartInterval</key><integer>1</integer>
   <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
   <key>ProcessType</key><string>Background</string>
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/farsight/watcher.err</string>
 </dict>
