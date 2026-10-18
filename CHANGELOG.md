@@ -2,6 +2,17 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Tuning file, postroll, phrase audio dump
+
+- **Context:** recognition still makes mistakes with Koochik; tuning needs real examples and
+  parameters that can change without a rebuild.
+- **Change:** `~/tools/farsight/tuning` (see `tuning.example`) sets vad_threshold, min_silence,
+  min_speech, max_speech, preroll, postroll, threads, dump; values are logged as `tuning:`.
+  Phrases are now decoded with postroll (0.15 s) as well as preroll. `dump = 1` (or
+  `FARSIGHT_DUMP=1`) writes each phrase as 16 kHz WAV plus `index.tsv` in
+  `~/Library/Logs/farsight/audio/`.
+- **Status:** compiles; to verify on macOS. Vazirmatn verified on macOS (whole UI in Vazirmatn).
+
 ## 2026-10-18 — Vazirmatn font for Persian text
 
 - **Context:** Persian text in Foresight used the macOS fallback font; Vazirmatn is the expected
@@ -14,8 +25,7 @@ Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
     Logs `font: Vazirmatn in use` the first time. `FARSIGHT_FONT=system` disables it.
   - `setup-persian.sh` downloads the nine static Vazirmatn TTFs (pinned commit 6e553e3, SIL OFL 1.1).
   - `shim/build.sh` links CoreText and CoreFoundation.
-- **Status:** compiles against stub headers on Linux; to verify on macOS. If Flutter does not go
-  through CoreText for fallback, the log will show registration but no "in use" line.
+- **Status:** verified on macOS 2026-10-18.
 
 ## 2026-10-18 — Bigger Persian model; longer phrase pause
 

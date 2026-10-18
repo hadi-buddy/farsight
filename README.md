@@ -54,6 +54,12 @@ You should see `config: engine=persian` and `asr (persian): ready`. Start a reco
 
 To log every transcript for debugging: `FARSIGHT_TRACE=1 ./launch.sh`.
 
+## Tuning
+
+Copy `tuning.example` to `~/tools/farsight/tuning` and edit it: phrase pause, VAD sensitivity, audio padding around each phrase, CPU threads. Relaunch with `./launch.sh`; no rebuild needed. The values in use are logged as a `tuning:` line in `shim.log`.
+
+With `dump = 1`, every phrase is saved as a WAV file plus its transcript in `~/Library/Logs/farsight/audio/` (`index.tsv`), which makes recognition errors easy to collect and compare.
+
 ## Limitations
 
 - **Persian only.** English words inside Persian speech come out as Persian-script approximations. For an English meeting, open Foresight normally (without `launch.sh`).
