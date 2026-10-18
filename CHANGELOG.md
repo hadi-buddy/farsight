@@ -2,6 +2,31 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Found the real cause: macOS window-state restoration, not a locale key at all
+
+- **Context:** the "menu says فارسی, app opens in English" bug survived every previous fix in this
+  session's thread (constructor-timing, NSUserDefaults dual-write), even though logs proved each of
+  those writes landed correctly every time. Captured Foresight's own unified-log output
+  (`log stream --predicate 'process == "Foresight"'`) across a kill/reopen cycle: found a line
+  confirming Foresight's own Firebase init checks `com.firebase.instanceid.user_defaults.locale` and
+  *skips* writing it if a value is already present — ruling out "Foresight overwrites our value" as
+  well. With every write-based theory eliminated by direct evidence, tested a completely different
+  mechanism: macOS's own **Saved Application State** (window/session restore across quits). Deleted
+  `~/Library/Saved Application State/com.google.AIEdgeForesight.savedState` by hand and relaunched —
+  fixed it immediately, with no other change. This is what the whole Firebase-locale-key chase had been
+  missing: restoration replays the *previous* session's rendered state (language included) on top of
+  whatever this launch's locale actually resolves to, regardless of any preference or launch argument.
+- **Change (`shim/persian_menu.m`):** `DisableStateRestoration()`, called first in `persian_menu_init()`
+  (before `SetFirebaseLocale`): deletes that saved-state folder on every launch and sets
+  `NSQuitAlwaysKeepsWindows=false` for Foresight's bundle, so there's nothing saved to restore on a
+  future launch this code doesn't run before either (a login item, a system-triggered relaunch).
+  `SetFirebaseLocale` itself is kept (now explained as likely harmless rather than load-bearing) since
+  something does read that key and skip overwriting it if present — no reason to remove a correct,
+  low-risk write now that the actual fix is identified.
+- **Status:** `DisableStateRestoration`'s core mechanism (manually deleting the saved-state folder,
+  then relaunching) verified fixing the bug on the maintainer's Mac; the automated code path itself not
+  yet rebuilt/tested.
+
 ## 2026-10-18 — Also write the Firebase locale via NSUserDefaults
 
 - **Context:** the constructor-timing fix (previous entry) still didn't fix the reported bug, but this

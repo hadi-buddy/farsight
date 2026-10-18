@@ -58,6 +58,31 @@ static NSString *CurrentLanguage(void) {
   return (saved.length > 0) ? saved : @"fa";
 }
 
+// The actual root cause of "menu says فارسی, app opens in English" (found
+// after SetFirebaseLocale below was confirmed correct -- writes, syncs, and
+// reads back fa every time -- and the bug still reproduced): macOS's own
+// window/app state restoration ("Saved Application State") replays the
+// previous session's UI, language included, over whatever this launch's
+// locale actually is. Confirmed by testing: deleting
+// ~/Library/Saved Application State/<bundle-id>.savedState and relaunching
+// was the one thing that actually fixed it, with no other code change.
+// NSQuitAlwaysKeepsWindows=false additionally asks macOS not to save state
+// in the first place, so there's nothing to restore on a future launch this
+// doesn't get a chance to run before (a login item, a system-triggered
+// relaunch after a crash, etc.).
+static void DisableStateRestoration(void) {
+  NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
+  if (!bundleID) return;
+  NSString *savedStateDir = [NSString stringWithFormat:@"%@/Library/Saved Application State/%@.savedState",
+                                                         NSHomeDirectory(), bundleID];
+  NSError *rmErr = nil;
+  BOOL removed = [NSFileManager.defaultManager removeItemAtPath:savedStateDir error:&rmErr];
+  logf_("menu: DisableStateRestoration: removed saved state = %d (%s)", removed,
+        rmErr ? rmErr.localizedDescription.UTF8String : "ok");
+  CFPreferencesSetAppValue(CFSTR("NSQuitAlwaysKeepsWindows"), kCFBooleanFalse, (__bridge CFStringRef)bundleID);
+  CFPreferencesAppSynchronize((__bridge CFStringRef)bundleID);
+}
+
 // Foresight's own UI strings turned out not to follow -AppleLanguages at all --
 // they come from wherever Foresight keys its translated content off of, and
 // that's this cached locale (found by inspecting
@@ -66,6 +91,10 @@ static NSString *CurrentLanguage(void) {
 // Foresight itself is evidently reading it for this. -AppleLanguages still
 // gets passed too, for anything in the process that does follow the normal
 // macOS mechanism (e.g. our own injected "Language" menu's text direction).
+// Kept alongside DisableStateRestoration() even though that one turned out
+// to be the actual fix: harmless, and whatever reads this key (confirmed:
+// Foresight's own Firebase init checks it and skips overwriting if already
+// present) should still see our choice, not a stale one.
 //
 // Must run before Foresight's own startup code reads this key (observed: a
 // write from installMenu, on NSApplicationDidFinishLaunchingNotification, was
@@ -234,6 +263,7 @@ static FarsightMenuController *g_controller;
 void persian_menu_init(const char *home) {
   snprintf(g_lang_file, sizeof g_lang_file, "%s/tools/farsight/lang", home);
   snprintf(g_dylib_path, sizeof g_dylib_path, "%s/tools/farsight/shim/libfarsight.dylib", home);
+  DisableStateRestoration();              // the actual fix -- see its comment
   SetFirebaseLocale(CurrentLanguage());  // as early as possible -- see SetFirebaseLocale's comment
   g_controller = [FarsightMenuController new];
   [[NSNotificationCenter defaultCenter] addObserverForName:NSApplicationDidFinishLaunchingNotification
