@@ -2,6 +2,17 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Lower Gemma temperature for Persian summaries
+
+- **Context:** Gemma's Persian summaries had garbled words in every run («تحلی» for «تحلیلی»,
+  «تعاری» for «تعاریف», «موفقیت‌آمی», «مثلهفعل»). Foresight samples Gemma at temperature 0.4 /
+  top_k 40, which a small on-device model handles poorly in Persian.
+- **Change:** `gemma_create()` in `shim/chat_bridge.c` wraps `litert_lm_create_conversation_v2`
+  for conversations served by Gemma and sets every `temperature` / `top_k` in the config to
+  0.1 / 10. `FARSIGHT_GEMMA_SAMPLING="<temp>,<top_k>"` changes the values, `app` keeps Foresight's.
+  Logs `chat: Gemma sampling …` once.
+- **Status:** config rewrite unit-tested; to verify on macOS that summaries have fewer misspellings.
+
 ## 2026-10-18 — Persian summary headings
 
 - **Context:** Persian summaries still had the English template headings «Overview» and «Details»,
