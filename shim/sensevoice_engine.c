@@ -17,11 +17,17 @@
 #include <sys/stat.h>
 
 #include "persian_itn.h"
+#include "persian_text.h"
 #include "sherpa-onnx-c-api.h"
 
 #define IN_RATE 48000
 #define VAD_RATE 16000
 #define MAX_STREAMS 4
+// Silero VAD marks a phrase a little after speech begins, which clips the first
+// syllable ("ظه ضبط" for "...ه ضبط"). Each stream keeps its recent 16 kHz audio
+// in a ring so a phrase can be decoded with PREROLL of audio before it.
+#define RING (VAD_RATE * 32)            // longer than max_speech_duration + silence
+#define PREROLL (VAD_RATE * 35 / 100)   // 0.35 s
 
 extern void logf_(const char *fmt, ...);
 
@@ -49,6 +55,8 @@ API(SherpaOnnxLinearResamplerResampleFree);
 typedef struct {
   const SherpaOnnxVoiceActivityDetector *vad;
   const SherpaOnnxLinearResampler *resampler;
+  float *ring;    // last RING samples fed to the VAD
+  long long fed;  // samples fed since the last reset
 } Stream;
 
 static pthread_mutex_t g_mu = PTHREAD_MUTEX_INITIALIZER;
@@ -184,8 +192,25 @@ static Stream *get_stream(int id) {
   if (!s->vad) {
     s->vad = p_SherpaOnnxCreateVoiceActivityDetector(&g_vad_cfg, 60.0f);
     s->resampler = p_SherpaOnnxCreateLinearResampler(IN_RATE, VAD_RATE, VAD_RATE * 0.45f, 6);
+    s->ring = calloc(RING, sizeof(float));
+    s->fed = 0;
   }
   return s;
+}
+
+static void ring_push(Stream *s, const float *x, int n) {
+  if (!s->ring) return;
+  for (int i = 0; i < n; i++) s->ring[(s->fed + i) % RING] = x[i];
+  s->fed += n;
+}
+
+// Persian post-processing: spoken numbers -> digits, then orthography (ZWNJ, ی/ک).
+static char *postprocess(const char *raw) {
+  if (g_lang != SV_LANG_PERSIAN) return strdup(raw);
+  char *a = persian_itn(raw);
+  char *b = persian_fix(a);
+  free(a);
+  return b;
 }
 
 // Transcribes every finished VAD segment; returns the number of results written.
@@ -194,14 +219,26 @@ static int drain(Stream *s, SvResult *out, int max_out) {
   while (!p_SherpaOnnxVoiceActivityDetectorEmpty(s->vad)) {
     const SherpaOnnxSpeechSegment *seg = p_SherpaOnnxVoiceActivityDetectorFront(s->vad);
     if (n < max_out && seg->n > 0) {
+      // Prepend PREROLL samples from the ring when they are still in it.
+      long long from = seg->start - PREROLL;
+      if (from < 0) from = 0;
+      if (s->fed - from > RING) from = s->fed - RING;
+      int pad = (s->ring && from < seg->start) ? (int)(seg->start - from) : 0;
+      float *buf = pad ? malloc(sizeof(float) * (pad + seg->n)) : NULL;
+      if (buf) {
+        for (int i = 0; i < pad; i++) buf[i] = s->ring[(from + i) % RING];
+        memcpy(buf + pad, seg->samples, sizeof(float) * seg->n);
+      } else {
+        pad = 0;
+      }
       const SherpaOnnxOfflineStream *os = p_SherpaOnnxCreateOfflineStream(g_rec);
-      p_SherpaOnnxAcceptWaveformOffline(os, VAD_RATE, seg->samples, seg->n);
+      p_SherpaOnnxAcceptWaveformOffline(os, VAD_RATE, buf ? buf : seg->samples, pad + seg->n);
       p_SherpaOnnxDecodeOfflineStream(g_rec, os);
+      free(buf);
       const SherpaOnnxOfflineRecognizerResult *r = p_SherpaOnnxGetOfflineStreamResult(os);
       if (r && r->text && r->text[0]) {
-        // Shenava spells numbers out; turn them into digits.
-        out[n].text = g_lang == SV_LANG_PERSIAN ? persian_itn(r->text) : strdup(r->text);
-        out[n].start_us = (long long)seg->start * 1000000 / VAD_RATE;
+        out[n].text = postprocess(r->text);
+        out[n].start_us = (long long)(seg->start - pad) * 1000000 / VAD_RATE;
         out[n].end_us = (long long)(seg->start + seg->n) * 1000000 / VAD_RATE;
         n++;
       }
@@ -219,7 +256,10 @@ int sv_push(int stream, const float *samples, int n, SvResult *out, int max_out)
   pthread_mutex_lock(&g_mu);
   Stream *s = get_stream(stream);
   const SherpaOnnxResampleOut *ro = p_SherpaOnnxLinearResamplerResample(s->resampler, samples, n, 0);
-  if (ro && ro->n > 0) p_SherpaOnnxVoiceActivityDetectorAcceptWaveform(s->vad, ro->samples, ro->n);
+  if (ro && ro->n > 0) {
+    ring_push(s, ro->samples, ro->n);
+    p_SherpaOnnxVoiceActivityDetectorAcceptWaveform(s->vad, ro->samples, ro->n);
+  }
   if (ro) p_SherpaOnnxLinearResamplerResampleFree(ro);
   int got = drain(s, out, max_out);
   pthread_mutex_unlock(&g_mu);
@@ -235,6 +275,7 @@ int sv_finish(int stream, SvResult *out, int max_out) {
   // The next session starts from zero: timestamps are relative to stream start.
   p_SherpaOnnxVoiceActivityDetectorReset(s->vad);
   p_SherpaOnnxLinearResamplerReset(s->resampler);
+  s->fed = 0;
   pthread_mutex_unlock(&g_mu);
   return got;
 }

@@ -1,3 +1,3 @@
 #!/bin/zsh
 # Builds libfarsight.dylib (arm64).
-cd ${0:A:h} && clang -arch arm64 -dynamiclib -O2 -Wall -o libfarsight.dylib farsight.c sensevoice_engine.c persian_itn.c chat_bridge.c cJSON.c -lcurl
+cd ${0:A:h} && clang -arch arm64 -dynamiclib -O2 -Wall -o libfarsight.dylib farsight.c sensevoice_engine.c persian_itn.c persian_text.c chat_bridge.c cJSON.c -lcurl

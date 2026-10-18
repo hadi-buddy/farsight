@@ -2,6 +2,19 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Persian orthography, VAD pre-roll, RTL experiment
+
+- **Context:** the first live run showed «می شه» / «طرح های» without ZWNJ, and a clipped first
+  syllable («ظه ضبط»).
+- **Change:**
+  - `shim/persian_text.c` (new): ي/ى→ی, ك→ک, Arabic-Indic→Persian digits; ZWNJ for «می/نمی + verb»,
+    «word + ها/های/…», «…ه + ای». Whole tokens only. Tests in `shim/test/text_test.c`.
+  - `shim/sensevoice_engine.c`: per-stream 32 s ring of 16 kHz audio; each phrase is decoded with
+    0.35 s of audio before the VAD start. Output goes through ITN, then `persian_fix`.
+  - `launch.sh`: `FARSIGHT_LANG=fa` starts Foresight with that UI language, to test whether the
+    app lays out right-to-left.
+- **Status:** unit tests pass on Linux; to verify on macOS.
+
 ## 2026-10-18 — First live run on macOS
 
 - **Context:** first end-to-end test on the maintainer's Mac (Apple Silicon, Foresight with Gemma 4 E4B).
