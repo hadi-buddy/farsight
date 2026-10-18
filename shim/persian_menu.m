@@ -1,4 +1,4 @@
-// "زبان" (Language) menu for Foresight's own menu bar.
+// "Language" menu for Foresight's own menu bar.
 //
 // The menu bar (Foresight/Edit/View/Window, …) is native AppKit even though
 // Foresight's window content is Flutter (confirmed: `setTitle:` is a real
@@ -7,13 +7,14 @@
 // language switcher"). So unlike the window content, this part can be
 // extended with ordinary, public NSMenu/NSMenuItem calls.
 //
-// On NSApplicationDidFinishLaunchingNotification, inserts a top-level "زبان"
-// menu right after "Window", with فارسی/English items. Picking one writes the
-// choice to ~/tools/farsight/lang (the launch.sh fallback added alongside
-// this) and runs launch.sh in the background; launch.sh's own logic quits the
-// running Foresight (which includes us) and reopens it with the right
-// -AppleLanguages/-AppleLocale. We never call -terminate: ourselves, to avoid
-// racing launch.sh's own quit-then-relaunch sequence.
+// On NSApplicationDidFinishLaunchingNotification, inserts a top-level
+// "Language" menu right after "Window", with فارسی/English items. Picking one
+// writes the choice to ~/tools/farsight/lang (the launch.sh fallback added
+// alongside this) and relaunches Foresight automatically by running
+// launch.sh in the background -- the user never has to restart it by hand.
+// launch.sh's own logic quits the running Foresight (which includes us) and
+// reopens it with the right -AppleLanguages/-AppleLocale; we never call
+// -terminate: ourselves, to avoid racing that quit-then-relaunch sequence.
 
 #import <AppKit/AppKit.h>
 
@@ -21,6 +22,30 @@ extern void logf_(const char *fmt, ...);
 
 static char g_lang_file[700];
 static char g_launch_script[700];
+
+// The same Vazirmatn font persian_font.c registers process-wide (see its
+// comment), looked up directly here: AppKit's own menu-text layout may not
+// go through the CTFontCreateForString fallback persian_font.c interposes
+// (that's confirmed for Flutter/Skia's calls, not for NSMenuItem), so فارسی
+// gets the right font explicitly instead of relying on it indirectly.
+static NSFont *VazirmatnMenuFont(void) {
+  NSFont *menuFont = [NSFont menuFontOfSize:0];
+  NSFont *f = [NSFont fontWithName:@"Vazirmatn-Regular" size:menuFont.pointSize];
+  return f ?: menuFont;  // FARSIGHT_FONT=system, or fonts not installed: fall back silently
+}
+
+// RTL-correct attributed title for Persian menu text (menu items don't pick
+// up writing direction from content the way free-flowing text views do).
+static NSAttributedString *PersianMenuTitle(NSString *text) {
+  NSMutableParagraphStyle *style = [NSMutableParagraphStyle new];
+  style.baseWritingDirection = NSWritingDirectionRightToLeft;
+  style.alignment = NSTextAlignmentRight;
+  return [[NSAttributedString alloc] initWithString:text
+                                          attributes:@{
+                                            NSFontAttributeName : VazirmatnMenuFont(),
+                                            NSParagraphStyleAttributeName : style,
+                                          }];
+}
 
 static NSString *CurrentLanguage(void) {
   NSString *path = [NSString stringWithUTF8String:g_lang_file];
@@ -46,15 +71,16 @@ static NSString *CurrentLanguage(void) {
     return;
   }
   for (NSMenuItem *item in mainMenu.itemArray) {
-    if ([item.submenu.title isEqualToString:@"زبان"]) return;  // already installed
+    if ([item.submenu.title isEqualToString:@"Language"]) return;  // already installed
   }
 
-  NSMenuItem *langMenuItem = [[NSMenuItem alloc] initWithTitle:@"زبان" action:NULL keyEquivalent:@""];
-  NSMenu *langMenu = [[NSMenu alloc] initWithTitle:@"زبان"];
+  NSMenuItem *langMenuItem = [[NSMenuItem alloc] initWithTitle:@"Language" action:NULL keyEquivalent:@""];
+  NSMenu *langMenu = [[NSMenu alloc] initWithTitle:@"Language"];
   langMenuItem.submenu = langMenu;
 
   self.faItem = [[NSMenuItem alloc] initWithTitle:@"فارسی" action:@selector(selectFarsi:) keyEquivalent:@""];
   self.faItem.target = self;
+  self.faItem.attributedTitle = PersianMenuTitle(@"فارسی");
   [langMenu addItem:self.faItem];
 
   self.enItem = [[NSMenuItem alloc] initWithTitle:@"English" action:@selector(selectEnglish:) keyEquivalent:@""];

@@ -2,6 +2,26 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Language menu: English label, Vazirmatn+RTL for فارسی
+
+- **Change (`shim/persian_menu.m`):**
+  - Top-level menu renamed "زبان" → "Language" (English, as asked).
+  - The "فارسی" item gets an explicit `attributedTitle`: `Vazirmatn-Regular` at the menu's own font
+    size (`VazirmatnMenuFont()`), plus `NSMutableParagraphStyle.baseWritingDirection = .rightToLeft`
+    (`PersianMenuTitle()`). This is explicit, not left to the `CTFontCreateForString` interpose in
+    `persian_font.c`: that one is confirmed to work for Flutter/Skia's calls (see the previous
+    CHANGELOG entry's investigation), but AppKit's own menu-text layout is a different code path that
+    was never verified to go through the same function, so relying on it here would be the same kind
+    of guess this project tries not to make. Falls back to the plain menu font if Vazirmatn isn't
+    registered (`FARSIGHT_FONT=system`, or fonts not installed) — `?:` in `VazirmatnMenuFont()`, same
+    as `persian_font.c`'s own fallback behavior.
+  - Restart was already automatic since the previous entry (`setLanguage:` already runs `launch.sh` in
+    the background after writing the lang file, no manual step) — clarified in the file's header
+    comment since it came up as if it weren't there; nothing to fix in the relaunch logic itself.
+- **Status:** written, not yet verified on macOS — in particular whether `attributedTitle` lines up
+  visually with the `.state` checkmark the way a plain `title` does (an AppKit quirk worth checking
+  once built).
+
 ## 2026-10-18 — Language switcher moved into Foresight's own menu bar
 
 - **Context:** the first version of the language switcher (previous entry below) was a separate,
