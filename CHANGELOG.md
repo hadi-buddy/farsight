@@ -2,6 +2,17 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Bigger Persian model; longer phrase pause
+
+- **Context:** with Rizeh (32M) the live test gave «حدمند» for «هدفمند», and the phrase was split
+  mid-word into «حدمند» + «ذ بشه» at a short pause.
+- **Change:**
+  - `setup-persian.sh` downloads Shenava Koochik v1.0 (114M, same NeMo CTC API; 7.49% WER /
+    2.30% CER on visualears-golden-6669) by default; `FARSIGHT_MODEL=rizeh` keeps the small one.
+  - The engine prefers `persian/shenava-koochik-v1.0`, falling back to Rizeh, and logs which.
+  - VAD `min_silence_duration` 0.6 s → 0.9 s for Persian, so short pauses don't split phrases.
+- **Status:** to verify on macOS.
+
 ## 2026-10-18 — Persian UI by default
 
 - **Context:** testing `FARSIGHT_LANG=fa` showed Foresight ships a Persian translation: the whole UI

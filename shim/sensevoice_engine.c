@@ -135,7 +135,9 @@ static void *load_thread(void *arg) {
     memset(&g_vad_cfg, 0, sizeof g_vad_cfg);
     g_vad_cfg.silero_vad.model = g_vad_model;
     g_vad_cfg.silero_vad.threshold = 0.5f;
-    g_vad_cfg.silero_vad.min_silence_duration = 0.6f;   // pause that ends a phrase
+    // Pause that ends a phrase. Persian speakers often pause briefly inside a
+    // phrase; 0.6 s split words in two («هدفمند» -> «حدمند» + «ذ بشه»).
+    g_vad_cfg.silero_vad.min_silence_duration = g_lang == SV_LANG_PERSIAN ? 0.9f : 0.6f;
     g_vad_cfg.silero_vad.min_speech_duration = 0.25f;
     g_vad_cfg.silero_vad.max_speech_duration = 15.0f;   // force a break in long monologues
     g_vad_cfg.silero_vad.window_size = 512;
@@ -155,8 +157,16 @@ int sv_available(const char *home, int lang) {
   g_lang = lang;
   snprintf(g_dir, sizeof g_dir, "%s/Library/Application Support/farsight", home);
   if (lang == SV_LANG_PERSIAN) {
-    snprintf(g_model, sizeof g_model, "%s/persian/shenava-rizeh-v1.0/model.onnx", g_dir);
-    snprintf(g_tokens, sizeof g_tokens, "%s/persian/shenava-rizeh-v1.0/tokens.txt", g_dir);
+    // Prefer Shenava Koochik (114M, more accurate); fall back to Rizeh (32M).
+    static const char *models[] = {"shenava-koochik-v1.0", "shenava-rizeh-v1.0"};
+    for (int i = 0; i < 2; i++) {
+      snprintf(g_model, sizeof g_model, "%s/persian/%s/model.onnx", g_dir, models[i]);
+      snprintf(g_tokens, sizeof g_tokens, "%s/persian/%s/tokens.txt", g_dir, models[i]);
+      if (exists(g_model) && exists(g_tokens)) {
+        logf_("asr: persian model %s", models[i]);
+        break;
+      }
+    }
   } else {
     snprintf(g_model, sizeof g_model, "%s/sensevoice/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/model.int8.onnx", g_dir);
     snprintf(g_tokens, sizeof g_tokens, "%s/sensevoice/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17/tokens.txt", g_dir);

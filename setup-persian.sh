@@ -1,13 +1,19 @@
 #!/bin/zsh
-# Downloads the Persian engine: sherpa-onnx C library, Shenava Rizeh v1.0 (Persian
-# NeMo CTC, Apache-2.0) and Silero VAD. Persian is the default engine.
-# Installs into ~/Library/Application Support/farsight (about 150MB).
+# Downloads the Persian engine: sherpa-onnx C library, a Shenava Persian speech model
+# (NeMo CTC, Apache-2.0) and Silero VAD. Persian is the default engine.
+# Installs into ~/Library/Application Support/farsight.
+#   FARSIGHT_MODEL=koochik (default, 114M params, more accurate, ~450 MB)
+#   FARSIGHT_MODEL=rizeh   (32M params, smaller and faster, ~120 MB)
 set -e
 SHERPA_VERSION=1.13.8
 DEST="${FARSIGHT_MODELS:-$HOME/Library/Application Support/farsight}"
 REL=https://github.com/k2-fsa/sherpa-onnx/releases/download
-HF=https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx/resolve/main
-FA="$DEST/persian/shenava-rizeh-v1.0"
+case ${FARSIGHT_MODEL:-koochik} in
+  rizeh) NAME=Rizeh ;;
+  *) NAME=Koochik ;;
+esac
+HF=https://huggingface.co/Reza2kn/Shenava-$NAME-v1.0-sherpa-onnx/resolve/main
+FA="$DEST/persian/shenava-${NAME:l}-v1.0"
 mkdir -p "$DEST/sensevoice" "$DEST/sherpa-onnx" "$FA"
 
 # Resumable download: keeps a .part file and continues from it after a dropped connection.
@@ -31,7 +37,7 @@ if [[ ! -f "$DEST/sherpa-onnx/lib/libsherpa-onnx-c-api.dylib" ]]; then
   rm -rf "$DEST/sherpa-onnx/lib" && mv "$tmp"/*/lib "$DEST/sherpa-onnx/lib" && rm -rf "$tmp" "$ARCHIVE"
 fi
 for f in model.onnx tokens.txt; do
-  echo "downloading Shenava Rizeh v1.0: $f"
+  echo "downloading Shenava $NAME v1.0: $f"
   fetch "$HF/$f" "$FA/$f"
 done
 [[ -s "$FA/LICENSE" ]] || curl -fsL --max-time 30 -o "$FA/LICENSE" "$HF/LICENSE" || rm -f "$FA/LICENSE"

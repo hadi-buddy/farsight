@@ -6,7 +6,7 @@
 
 **فارسایت** به [Google AI Edge Foresight](https://ai.google.dev/edge)، برنامه‌ی یادداشت‌برداری جلسه‌ی گوگل برای مک، **رونویسی زنده‌ی فارسی** اضافه می‌کند. Foresight فقط انگلیسی می‌فهمد. فارسایت موقع اجرا یک مدل باز فارسی را جای مدل انگلیسی می‌گذارد، تا جلسه‌ها، تماس‌ها و یادداشت‌های صوتی فارسی **کاملاً آفلاین و روی خود مک** به متن تبدیل شوند، بدون هیچ تغییری در خود برنامه.
 
-- 🎙️ **تشخیص گفتار فارسی روی دستگاه** — مدل [شنوا ریزه](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) با [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) روی CPU اجرا می‌شود. صدا هیچ‌وقت از مک بیرون نمی‌رود.
+- 🎙️ **تشخیص گفتار فارسی روی دستگاه** — مدل [شنوا کوچیک](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) (۱۱۴ میلیون پارامتر) با [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) روی CPU اجرا می‌شود. صدا هیچ‌وقت از مک بیرون نمی‌رود.
 - 🔢 **اعداد به رقم** — «هزار و چهارصد و سه» ← «۱۴۰۳».
 - 📝 **خلاصه‌ی فارسی جلسه** — اگر چت را به یک مدل محلی وصل کنید، خلاصه‌ی جلسه‌های فارسی هم فارسی نوشته می‌شود.
 - ↔️ **رابط فارسی و راست‌چین** — Foresight ترجمه‌ی فارسی دارد و فارسایت آن را به فارسی باز می‌کند، پس کل برنامه راست‌چین است.
@@ -19,7 +19,7 @@
 - مک با تراشه‌ی Apple Silicon
 - Foresight نصب‌شده، که یک بار باز شده و دانلود مدل‌هایش تمام شده باشد
 - Xcode Command Line Tools — اگر ندارید: `xcode-select --install`
-- حدود ۱۵۰ مگابایت فضای خالی
+- حدود ۵۰۰ مگابایت فضای خالی (یا ۱۵۰ مگ با مدل کوچک‌تر: `FARSIGHT_MODEL=rizeh ./setup-persian.sh`)
 
 ## نصب
 
@@ -80,7 +80,7 @@ grep -E "config:|asr" ~/Library/Logs/farsight/shim.log | tail
 
 Foresight با Flutter ساخته شده و برای رونویسی، یک کتابخانه‌ی C گوگل را صدا می‌زند. مجوزهای برنامه اجازه‌ی تزریق کتابخانه (`DYLD_INSERT_LIBRARIES`) را می‌دهند، پس `launch.sh` برنامه را با `libfarsight.dylib` اجرا می‌کند.
 
-۱. **تشخیص گفتار جایگزین می‌شود:** صدایی که Foresight می‌فرستد به ۱۶ کیلوهرتز تبدیل می‌شود، با Silero VAD به عبارت‌ها تقسیم می‌شود، و هر عبارت با مدل شنوا به متن فارسی تبدیل می‌شود. نتیجه در همان قالبی برمی‌گردد که Foresight انتظار دارد.
+۱. **تشخیص گفتار جایگزین می‌شود:** صدایی که Foresight می‌فرستد به ۱۶ کیلوهرتز تبدیل می‌شود، با Silero VAD به عبارت‌ها تقسیم می‌شود، و هر عبارت با مدل شنوا کوچیک به متن فارسی تبدیل می‌شود. نتیجه در همان قالبی برمی‌گردد که Foresight انتظار دارد.
 
 ۲. **فیلتر حروف برداشته می‌شود:** Foresight هر حرف غیرانگلیسی را از متن پاک می‌کند. فارسایت این فیلتر را در حافظه عوض می‌کند (فایل روی دیسک دست نمی‌خورد) تا فقط کاراکترهای کنترلی حذف شوند.
 
@@ -105,7 +105,7 @@ Foresight با Flutter ساخته شده و برای رونویسی، یک کت�
 ## سپاس
 
 - بر پایه‌ی [foresight-zh](https://github.com/michaelpersonal/foresight-zh) از michaelpersonal، که روش تزریق را برای چینی پیدا کرد.
-- مدل گفتار فارسی: [شنوا ریزه v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) از Reza2kn (Apache-2.0).
+- مدل‌های گفتار فارسی: [شنوا کوچیک](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) و [شنوا ریزه](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) از Reza2kn (Apache-2.0).
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)، [Silero VAD](https://github.com/snakers4/silero-vad)، [cJSON](https://github.com/DaveGamble/cJSON).
 
 </div>
