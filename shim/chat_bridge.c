@@ -783,11 +783,41 @@ static void my_delete(void *conv) {
   unref(c);
 }
 
+// Trace mode: log every chunk Gemma streams back, to tell model misspellings apart
+// from text damaged on the way (e.g. a UTF-8 character split across chunks).
+typedef struct {
+  stream_cb cb;
+  void *ud;
+  FILE *f;
+} TraceCb;
+
+static void trace_chunk(char *chunk, void *u) {
+  TraceCb *t = u;
+  if (t->f) {
+    fprintf(t->f, "%s\n", chunk ? chunk : "(null)");
+    fflush(t->f);
+  }
+  int last = !chunk || !chunk[0];
+  t->cb(chunk, t->ud);
+  if (last) {
+    if (t->f) fclose(t->f);
+    free(t);
+  }
+}
+
 static int my_send_stream(void *conv, const char *msg, stream_cb cb, void *ud) {
   Conv *c = find_conv(conv);
   if (!c) {
     // Kept alive (not freed): the engine may read the message after returning.
     char *fa = gemma_language_msg(msg);
+    if (g_trace_chat && fa) {
+      char p[800];
+      snprintf(p, sizeof p, "%s/gemma-%ld.jsonl", g_dump_dir, (long)time(NULL));
+      TraceCb *t = calloc(1, sizeof *t);
+      t->cb = cb, t->ud = ud, t->f = fopen(p, "w");
+      logf_("chat: tracing Gemma output to %s", p);
+      return R.send_stream(conv, fa, trace_chunk, t);
+    }
     return R.send_stream(conv, fa ? fa : msg, cb, ud);
   }
   if (!msg || !push_message(c, msg)) {
