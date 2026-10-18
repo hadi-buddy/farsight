@@ -32,4 +32,11 @@ esac
 # process: deleting it from inside Foresight's own startup code was too late
 # (restoration is evidently applied before that code gets a chance to run).
 rm -rf "$HOME/Library/Saved Application State/com.google.AIEdgeForesight.savedState"
+# Belt-and-suspenders for the actual root fix: ApplePersistenceIgnoreState
+# tells AppKit to neither save nor restore state at all, so even a plain
+# reopen (double-click, Dock, Spotlight -- not through this script) that
+# happens before the shim's own constructor runs stays correct. Written here
+# too (not only from persian_menu.m) so it's in effect from the very first
+# run, not only after the shim has launched at least once before.
+defaults write com.google.AIEdgeForesight ApplePersistenceIgnoreState -bool YES 2>/dev/null
 exec open "${env_args[@]}" -a Foresight "${app_args[@]}"

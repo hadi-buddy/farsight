@@ -2,6 +2,34 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-18 — Fix: wrong preference key — `ApplePersistenceIgnoreState`, not `NSQuitAlwaysKeepsWindows`
+
+- **Context:** the previous entry's fix (delete the saved-state folder before launch, from `launch.sh`
+  and `relaunchWithLanguage:`) was built, pushed, and tested — bug still reproduced exactly as before.
+  Reconsidered the whole theory from scratch instead of adding another timing tweak: the safety-net
+  function `DisableFutureStateSaving()` set `NSQuitAlwaysKeepsWindows=false`, but that key is unrelated
+  to state restoration itself — it only controls the "keep windows when quitting an app" system
+  prompt/behavior. The actual documented AppKit key that disables saving *and* restoring window/session
+  state altogether is `ApplePersistenceIgnoreState`. Nothing in this session had ever set it.
+- **Why this explains the specific failure mode (menu correct, UI wrong, only after a plain reopen):**
+  a direct quit+reopen (not through `launch.sh`) launches Foresight once, briefly, with no
+  `-AppleLanguages` override, before `watcher.sh` notices (its own ~2.5s detection window) and relaunches
+  it correctly through `launch.sh`. That brief first launch is enough for AppKit to save a fresh English
+  snapshot. `launch.sh`'s `rm -rf` on the saved-state folder was correct in principle, but raced against
+  macOS finishing that write — sometimes losing. With `ApplePersistenceIgnoreState=YES` set, AppKit never
+  writes or reads that snapshot in the first place, so there's nothing left to race against.
+- **Change:**
+  - `shim/persian_menu.m` (`DisableFutureStateSaving`): also sets `ApplePersistenceIgnoreState=true` via
+    `CFPreferencesSetAppValue`/`CFPreferencesAppSynchronize`, alongside the (harmless, kept as-is)
+    `NSQuitAlwaysKeepsWindows=false`.
+  - `launch.sh`: also runs `defaults write com.google.AIEdgeForesight ApplePersistenceIgnoreState -bool
+    YES` directly, right after the existing `rm -rf` of the saved-state folder — so the preference is in
+    effect from the very first run, not only after the shim itself has launched at least once before.
+  - Kept the saved-state-folder deletion in both `launch.sh` and `relaunchWithLanguage:` as a
+    belt-and-suspenders safety net; it should now be a no-op in practice since nothing writes that folder
+    once the preference takes effect.
+- **Status:** written, not yet rebuilt/verified on macOS.
+
 ## 2026-10-18 — Fix: delete the saved-state folder before launch, not inside it
 
 - **Context:** the previous entry's fix (`DisableStateRestoration` deleting the saved-state folder
