@@ -146,11 +146,25 @@ grep -E "config:|asr" ~/Library/Logs/farsight/shim.log | tail
 
 Foresight با Flutter ساخته شده و برای رونویسی، یک کتابخانه‌ی C گوگل را صدا می‌زند. مجوزهای برنامه اجازه‌ی تزریق کتابخانه (`DYLD_INSERT_LIBRARIES`) را می‌دهند، پس `launch.sh` برنامه را با `libfarsight.dylib` اجرا می‌کند.
 
+</div>
+
+<img src="docs/images/architecture.jpg" width="100%" alt="دیاگرام: سه نقطه‌ای که libfarsight.dylib داخلِ پروسه‌ی خودِ Foresight قاپ می‌زند — رونویسی، فونت، چت — و هرکدوم به کجا هدایت می‌شود">
+
+<div dir="rtl">
+
+شیم به‌جز مدلِ اختیاریِ چت/خلاصه، برای هیچ‌کدوم از این کارها به یه پروسه‌ی جدا نیاز نداره — دقیقاً داخلِ همون پروسه‌ی خودِ Foresight، فقط آدرسِ تابعی که هر نقطه بهش می‌رسه رو عوض می‌کنه:
+
 ۱. **تشخیص گفتار جایگزین می‌شود:** صدایی که Foresight می‌فرستد به ۱۶ کیلوهرتز تبدیل می‌شود، با Silero VAD به عبارت‌ها تقسیم می‌شود، و هر عبارت با مدل شنوا کوچیک به متن فارسی تبدیل می‌شود. نتیجه در همان قالبی برمی‌گردد که Foresight انتظار دارد.
 
 ۲. **فیلتر حروف برداشته می‌شود:** Foresight هر حرف غیرانگلیسی را از متن پاک می‌کند. فارسایت این فیلتر را در حافظه عوض می‌کند (فایل روی دیسک دست نمی‌خورد) تا فقط کاراکترهای کنترلی حذف شوند.
 
 ۳. **متن فارسی مرتب می‌شود:** اعداد به رقم فارسی تبدیل می‌شوند («یک» تنها به شکل کلمه می‌ماند)، نیم‌فاصله‌ها درست می‌شوند («می‌شه»، «طرح‌های») و «ي/ك» عربی به «ی/ک» فارسی تبدیل می‌شود. هر عبارت با کمی از صدای قبلش به مدل داده می‌شود تا کلمه‌ی اول بریده نشود.
+
+</div>
+
+<img src="docs/images/architecture-shenava-pipeline.jpg" width="100%" alt="دیاگرام: هفت مرحله از صدای خامِ میکروفون تا متنی که تو Foresight ظاهر می‌شه">
+
+<div dir="rtl">
 
 اگر مدل فارسی نباشد یا بالا نیاید، فارسایت به موتور انگلیسی خود Foresight برمی‌گردد.
 
@@ -164,7 +178,11 @@ Foresight با Flutter ساخته شده و برای رونویسی، یک کت�
 
 <img src="docs/images/reference-model-menu.jpg" width="420" alt="منوی Reference Model تو منوبارِ خودِ Foresight، با لیستِ مدل‌های محلیِ شناسایی‌شده">
 
+<img src="docs/images/architecture-menu-sequence.jpg" width="100%" alt="دیاگرامِ Sequence: هاور کردنِ منو سرورهای محلی رو async پراب می‌کنه، انتخابِ یکی config رو می‌نویسه، Foresight بسته می‌شه، و یه helperِ جدا دوباره بازش می‌کنه">
+
 <div dir="rtl">
+
+پشتِ‌پرده، انتخابِ یه مدل فقط یه تنظیم رو عوض نمی‌کنه — انتخاب رو رو دیسک می‌نویسه و Foresight رو کامل می‌بنده و دوباره باز می‌کنه، از طریقِ یه پردازه‌ی کوتاه‌مدتِ جدا (`shim/relaunch.m`)، تا نسخه‌ی جدید config رو تازه بخونه نه این‌که با نسخه‌ی قدیمی مسابقه بده.
 
 مدلِ Gemmaی داخلیِ Foresight کوچیکه و فارسیش قابل‌قبوله ولی یه‌خرده خشک؛ یه مدلِ محلیِ بزرگ‌تر خیلی روان‌تر می‌نویسه:
 
@@ -209,5 +227,6 @@ Foresight با Flutter ساخته شده و برای رونویسی، یک کت�
 - مدل‌های گفتار فارسی: [شنوا کوچیک](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) و [شنوا ریزه](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) از [Reza2kn](https://github.com/Reza2kn) (Apache-2.0).
 - فونت: [وزیرمتن](https://github.com/rastikerdar/vazirmatn) از صابر راستی‌کردار (SIL OFL 1.1).
 - [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx)، [Silero VAD](https://github.com/snakers4/silero-vad)، [cJSON](https://github.com/DaveGamble/cJSON).
+- دیاگرام‌های معماری با [diagram-design](https://github.com/cathrynlavery/diagram-design) از Cathryn Lavery ساخته شدن.
 
 </div>

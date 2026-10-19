@@ -125,9 +125,15 @@ With `dump = 1`, every phrase is saved as a WAV file plus its transcript in `~/L
 
 Foresight is a Flutter app. Its Dart code reaches Google's transcription library through a C API (`OdmlSpeechProcessorTranscribe`, `OdmlSpeechProcessorFinishStream`, …) resolved at runtime with `dlsym`. The app's entitlements allow `DYLD_INSERT_LIBRARIES`, so `launch.sh` starts it with `shim/libfarsight.dylib` loaded first.
 
+<img src="docs/images/architecture.jpg" width="100%" alt="Diagram: the three call sites libfarsight.dylib intercepts inside Foresight's own process — speech, font, and chat — and where each one is redirected">
+
+The shim never touches a *different* process to do its work, except for the optional chat/summary model — it swaps the function pointer each call site resolves to, inside Foresight's own process:
+
 1. **Speech recognition is replaced.** The shim interposes `dlsym` and wraps the transcription calls. The audio Foresight hands over (48 kHz float, one stream for the microphone and one for system audio) is resampled to 16 kHz, cut into phrases with Silero VAD, and each phrase is transcribed by Shenava Koochik. Results go back in Foresight's own result format, so the app cannot tell the difference. See `shim/sensevoice_engine.c`.
 2. **The ASCII filter is lifted.** Foresight's Dart layer deletes every character outside printable ASCII from transcripts, which would erase all Persian. The shim rewrites that regular expression in memory (copy-on-write; the file on disk is unchanged) so only control characters are removed.
 3. **Persian text is cleaned up.** Shenava spells numbers out; `shim/persian_itn.c` turns well-formed spoken numbers into Persian digits (a lone «یک» stays a word, since it usually means "a"). `shim/persian_text.c` adds zero-width non-joiners («می‌شه», «طرح‌های») and fixes Arabic ي/ك. Each phrase is decoded with 0.35 s of audio before the detected start, so first syllables are not clipped. Tests: `shim/test/itn_test.sh`.
+
+   <img src="docs/images/architecture-shenava-pipeline.jpg" width="100%" alt="Diagram: the seven-stage pipeline from raw microphone and system audio to text appearing in Foresight">
 
 4. **Vazirmatn for Persian text.** Foresight's fonts have no Persian glyphs, so Flutter asks macOS (CoreText `CTFontCreateForString`) for a fallback font. The shim answers that call with Vazirmatn at the matching size and weight for Arabic-script runs. See `shim/persian_font.c`.
 
@@ -140,6 +146,10 @@ Foresight's chat and meeting summaries normally run on its built-in Gemma model,
 Once Farsight is running, Foresight's own menu bar has a "Reference Model" menu (next to Language) — it auto-detects any of Ollama, LM Studio or a llama.cpp server running on their usual ports and lists their installed models, plus "Add…" for any other OpenAI-compatible server/model. Picking one relaunches Foresight on it, same as the Language menu; no terminal needed.
 
 <img src="docs/images/reference-model-menu.jpg" width="420" alt="The Reference Model menu in Foresight's own menu bar, listing auto-detected local models">
+
+<img src="docs/images/architecture-menu-sequence.jpg" width="100%" alt="Sequence diagram: hovering the menu probes local servers asynchronously, selecting one writes the config, Foresight quits, and a detached helper reopens it on the new model">
+
+Under the hood, picking a model doesn't just update a setting — it writes the choice to disk and takes Foresight through a full quit-and-reopen, via a short-lived detached helper process (see `shim/relaunch.m`), so the new process reads the config fresh instead of racing the old one.
 
 Foresight's built-in Gemma is small, and its Persian is serviceable but stiff; a larger local model reads noticeably more natural:
 
@@ -194,3 +204,4 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 - Persian speech models: [Shenava Koochik v1.0](https://huggingface.co/Reza2kn/Shenava-Koochik-v1.0-sherpa-onnx) and [Shenava Rizeh v1.0](https://huggingface.co/Reza2kn/Shenava-Rizeh-v1.0-sherpa-onnx) by [Reza2kn](https://github.com/Reza2kn) (Apache-2.0).
 - Font: [Vazirmatn](https://github.com/rastikerdar/vazirmatn) by Saber Rastikerdar (SIL OFL 1.1).
 - Inference: [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), [Silero VAD](https://github.com/snakers4/silero-vad) (MIT), [cJSON](https://github.com/DaveGamble/cJSON) (MIT).
+- Architecture diagrams generated with [diagram-design](https://github.com/cathrynlavery/diagram-design) by Cathryn Lavery.
