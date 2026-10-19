@@ -50,7 +50,7 @@ shim/build.sh
 </div>
 
 ```bash
-osacompile -o ~/Applications/Farsight.app -e 'do shell script "$HOME/tools/farsight/launch.sh"'
+./install-launcher.sh   # برای حذف: ./install-launcher.sh --uninstall
 ```
 
 <div dir="rtl">

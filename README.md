@@ -39,7 +39,7 @@ Optional extras:
 
 ```bash
 # A Dock / Spotlight launcher
-osacompile -o ~/Applications/Farsight.app -e 'do shell script "$HOME/tools/farsight/launch.sh"'
+./install-launcher.sh                # remove with: ./install-launcher.sh --uninstall
 
 # Auto-relaunch: if Foresight starts without Farsight (Dock, login item, update), restart it with Farsight
 ./install-watcher.sh                 # remove with: ./install-watcher.sh --uninstall
@@ -109,6 +109,7 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 | `shim/chat_bridge.c` | Optional chat/summaries on a local server |
 | `setup-persian.sh` | Downloads the Persian engine |
 | `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |
+| `install-launcher.sh` | Stable Dock/Spotlight launcher (fixed bundle ID, so re-running it updates the same icon) |
 | `CHANGELOG.md` | What changed and why |
 
 ## Credits

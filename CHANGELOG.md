@@ -2,6 +2,23 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-19 — Replace the `osacompile` launcher: it kept creating new Dock icons
+
+- **Context:** reported the Dock/Spotlight launcher (the optional `osacompile -o
+  ~/Applications/Farsight.app -e '...'` step in the README) can't be pinned to the Dock reliably — it kept
+  producing a fresh launcher icon instead of updating the one already there.
+- **Root cause:** `osacompile` doesn't set a `CFBundleIdentifier` on the app bundle it generates. Without
+  one, Launch Services has no stable key to recognize "this is the same app as the one from last time" —
+  each `osacompile` re-run could register as a distinct app, leaving old Dock entries orphaned or pointing
+  at a now-replaced bundle.
+- **Change:** `install-launcher.sh` (new) replaces the `osacompile` line. Hand-builds the `.app` bundle with
+  a fixed `CFBundleIdentifier` (`io.github.hadi-buddy.farsight.launcher`), a tiny shell-script executable
+  (`exec "$HOME/tools/farsight/launch.sh"`), Foresight's own icon copied in for visual recognizability, and
+  forces Launch Services to update that same entry in place (`lsregister -f`) instead of registering a new
+  one. `--uninstall` unregisters and removes it. README/README_fa updated to use it instead of the old
+  `osacompile` line.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-19 — Throttle relaunches: rapid menu switches crash Foresight, leave ghost Dock icons
 
 - **Context:** reported two new symptoms: Dock gains an extra Foresight icon each time the language is
