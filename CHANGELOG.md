@@ -2,6 +2,23 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-19 — Drop the separate launcher app entirely: pin Foresight.app itself instead
+
+- **Context:** the previous entry's fix (`install-launcher.sh`, a hand-built `.app` with a stable bundle
+  ID) did fix the original complaint — the pinned icon stopped duplicating itself. But it surfaced the
+  actual underlying problem: a separate `Farsight.app` wrapper and the real `Foresight.app` it launches are
+  two different bundles, so macOS always shows **two** Dock icons while running — the pinned launcher plus
+  Foresight's own live-running icon — no matter how stable the launcher's identity is. Not fixable while a
+  separate wrapper app exists at all.
+- **Change:** removed `install-launcher.sh` and the separate-launcher approach entirely.
+  `install-watcher.sh` (already existed, unchanged) already does exactly what's needed: if Foresight starts
+  without the shim — including a plain Dock click — it quits and relaunches it with Farsight within about
+  2.5s. So the real fix is simplest of all: README/README_fa now say to pin **Foresight.app itself** (drag
+  from `/Applications`, or Options → Keep in Dock while running) instead of building any launcher at all.
+  Since there's only ever one app bundle in play, there's only ever one Dock icon — exactly like any other
+  app.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-19 — Replace the `osacompile` launcher: it kept creating new Dock icons
 
 - **Context:** reported the Dock/Spotlight launcher (the optional `osacompile -o

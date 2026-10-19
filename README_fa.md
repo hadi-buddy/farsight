@@ -45,17 +45,17 @@ shim/build.sh
 
 ریپو باید دقیقاً در `~/tools/farsight` باشد، چون تنظیمات از همان‌جا خوانده می‌شود.
 
-**اختیاری:** ساخت یک آیکون در Dock و Spotlight:
+**اختیاری:** اگر Foresight از Dock یا بعد از آپدیت بدون فارسایت باز شد، خودکار با فارسایت دوباره اجرا شود:
 
 </div>
 
 ```bash
-./install-launcher.sh   # برای حذف: ./install-launcher.sh --uninstall
+./install-watcher.sh   # برای حذف: ./install-watcher.sh --uninstall
 ```
 
 <div dir="rtl">
 
-**اختیاری:** اگر Foresight از Dock یا بعد از آپدیت بدون فارسایت باز شد، خودکار با فارسایت دوباره اجرا شود: `./install-watcher.sh` (برای حذف: `./install-watcher.sh --uninstall`)
+برای آیکون تو Dock، به‌جای ساختن یه لانچرِ جدا، مستقیم **خودِ Foresight.app** رو پین کن (از `/Applications` بکشش تو Dock، یا موقع اجرا راست‌کلیک → Options → Keep in Dock) — با فعال‌بودنِ `install-watcher.sh`، هر بار که بازش کنی خودکار با شیم اجرا می‌شه. اگه یه اپِ لانچرِ جدا بسازیم، موقعِ اجرا یه آیکنِ جدا (علاوه بر خودِ Foresight) تو Dock می‌مونه — دو تا آیکن برای یه اپ. پین‌کردنِ مستقیمِ Foresight، فقط یکی نگه می‌داره، مثلِ هر اپِ دیگه.
 
 ## مطمئن شوید کار می‌کند
 

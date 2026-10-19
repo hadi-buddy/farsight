@@ -38,12 +38,11 @@ The repo must live at `~/tools/farsight`: the shim reads its settings from there
 Optional extras:
 
 ```bash
-# A Dock / Spotlight launcher
-./install-launcher.sh                # remove with: ./install-launcher.sh --uninstall
-
 # Auto-relaunch: if Foresight starts without Farsight (Dock, login item, update), restart it with Farsight
 ./install-watcher.sh                 # remove with: ./install-watcher.sh --uninstall
 ```
+
+For a Dock icon, pin **Foresight.app itself** (drag it from `/Applications` to the Dock, or right-click its icon while running → Options → Keep in Dock) rather than a separate launcher — with `install-watcher.sh` running, clicking it always ends up shimmed. A separate launcher app would show as its own Dock icon alongside Foresight's while running (two icons for one app); pinning Foresight directly keeps it to one, like any other app.
 
 ## Check that it works
 
@@ -109,7 +108,6 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 | `shim/chat_bridge.c` | Optional chat/summaries on a local server |
 | `setup-persian.sh` | Downloads the Persian engine |
 | `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |
-| `install-launcher.sh` | Stable Dock/Spotlight launcher (fixed bundle ID, so re-running it updates the same icon) |
 | `CHANGELOG.md` | What changed and why |
 
 ## Credits
