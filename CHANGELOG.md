@@ -2,6 +2,21 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-19 — Reference Model: also probe LM Studio on port 1235
+
+- **Context:** Reference Model menu showed "No local servers detected" even with LM Studio's local server
+  running. Confirmed with the user's own `curl`: `127.0.0.1:1234` refused the connection, but
+  `127.0.0.1:1235` answered — LM Studio's own Settings → Local Model API → Base URL showed `1235`, not the
+  `1234` default the menu only probed. The port is user-editable there, so it isn't safe to assume 1234.
+- **Change:** `shim/model_menu.m`'s `kLocalServers` now probes both `1234` and `1235` for LM Studio.
+- **Separately noted, not a bug:** a model downloaded in LM Studio doesn't appear in `/v1/models` (and so
+  doesn't appear in this menu, or pass `chat_bridge.c`'s own health check, which requires the model name to
+  already be in that list) until it's actually been loaded — chatting with it once inside LM Studio itself
+  is enough. "Just-in-time model loading" (a separate LM Studio setting) doesn't help here: `chat_bridge.c`
+  checks `/models` for the name before ever sending a chat request, so a model that would just-in-time-load
+  on first use still fails that earlier check.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-19 — Relaunch: quit first, then open fresh (was: open new, then quit old)
 
 - **Context:** with Foresight pinned to the Dock, every Language/Reference Model switch added a *second*,

@@ -40,13 +40,17 @@ typedef struct {
 
 // Common local OpenAI-compatible server ports. Each is probed for
 // {baseURL}/models on every menu open; unreachable ones are simply skipped
-// (most users won't have all three running).
+// (most users won't have all three running). LM Studio's port is
+// user-editable in its own settings (Settings -> Local Model API -> Edit
+// port) -- confirmed one install was actually on 1235, not the 1234 default
+// -- so both are probed.
 static LocalServer kLocalServers[] = {
     {@"Ollama", @"http://127.0.0.1:11434/v1"},
     {@"LM Studio", @"http://127.0.0.1:1234/v1"},
+    {@"LM Studio", @"http://127.0.0.1:1235/v1"},
     {@"llama.cpp", @"http://127.0.0.1:8080/v1"},
 };
-static const int kLocalServerCount = 3;
+static const int kLocalServerCount = 4;
 
 // -------------------------------------------------------------- chat file ---
 
