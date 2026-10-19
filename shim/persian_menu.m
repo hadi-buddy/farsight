@@ -24,6 +24,7 @@
 // expects even sandboxed apps to relaunch through.
 
 #import <AppKit/AppKit.h>
+#import "relaunch_throttle.h"
 
 extern void logf_(const char *fmt, ...);
 
@@ -246,6 +247,10 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
 
 - (void)setLanguage:(NSString *)lang {
   if ([lang isEqualToString:CurrentLanguage()]) return;
+  if (!relaunch_throttle_ok()) {
+    logf_("menu: relaunch throttled (too soon after the last one), ignoring %s", lang.UTF8String);
+    return;
+  }
   NSError *err = nil;
   [lang writeToFile:[NSString stringWithUTF8String:g_lang_file]
          atomically:YES

@@ -23,6 +23,7 @@
 // (read from ~/tools/farsight/lang) so switching models never resets it.
 
 #import <AppKit/AppKit.h>
+#import "relaunch_throttle.h"
 
 extern void logf_(const char *fmt, ...);
 
@@ -264,6 +265,10 @@ static void ProbeServer(NSString *baseURL, void (^done)(NSArray<NSString *> *mod
   NSDictionary<NSString *, NSString *> *before = CurrentChatConfig();
   NSString *nowLine = before ? [NSString stringWithFormat:@"%@ %@", before[@"url"], before[@"model"]] : @"off";
   if ([line isEqualToString:nowLine] || (before == nil && [line isEqualToString:@"off"])) return;
+  if (!relaunch_throttle_ok()) {
+    logf_("model-menu: relaunch throttled (too soon after the last one), ignoring %s", line.UTF8String);
+    return;
+  }
 
   NSError *err = nil;
   [line writeToFile:[NSString stringWithUTF8String:g_chat_file] atomically:YES encoding:NSUTF8StringEncoding error:&err];

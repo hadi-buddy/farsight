@@ -2,6 +2,37 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-19 — Throttle relaunches: rapid menu switches crash Foresight, leave ghost Dock icons
+
+- **Context:** reported two new symptoms: Dock gains an extra Foresight icon each time the language is
+  switched, and a pinned Dock icon always opens in English regardless of the saved setting; also "the app
+  sometimes crashes." Pulled the actual crash report
+  (`~/Library/Logs/DiagnosticReports/Foresight-2026-10-19-130322.ips`) rather than guessing: `SIGSEGV` /
+  `EXC_BAD_ACCESS`, and its crashed thread's top frames are entirely inside Foresight's own Swift code —
+  `SSOAuthPlugin.handle`, `LocalhostRedirectAuthFlow.signOut`, an over-release in
+  `_DictionaryStorage.deinit`/`swift::RefCounts::doDecrementSlow` — nothing of ours anywhere in the stack.
+  It happened in the middle of a burst of four language switches inside about 40 seconds
+  (`shim.log` timestamps 13:03:16-13:03:57).
+- **Diagnosis:** this is a pre-existing bug inside Foresight's own closed-source sign-out path, not
+  something we can fix directly. But `[NSApp terminate:nil]`, called on the old instance once a relaunch's
+  new instance is confirmed running (both `persian_menu.m`'s Language menu and `model_menu.m`'s Reference
+  Model menu do this), evidently runs into that race far more than normal usage would when relaunches
+  happen back-to-back — a real user quits Foresight once a day; rapid menu testing was quitting it every
+  few seconds. The duplicate Dock icons are the likely knock-on effect: a process that crashes instead of
+  quitting cleanly can leave an orphaned Dock tile behind, instead of properly handing off to the new
+  instance.
+- **Change:** `shim/relaunch_throttle.c` (new, shared by both menus so switching language then immediately
+  switching model is throttled together, not per-menu) — refuses a relaunch within 3 seconds of the last
+  one; `setLanguage:`/`setChatLine:` check it before writing their config file or relaunching at all (so a
+  throttled click leaves the menu's checkmark on the old, still-running value instead of looking like it
+  took effect).
+- **Not fixed:** the pinned-Dock-icon-always-English report — couldn't reproduce or find evidence for it
+  yet (`defaults read com.apple.dock persistent-apps` showed Foresight isn't currently pinned at all,
+  possibly removed after the bad experience). Worth re-testing once this throttle is in and the crash/ghost
+  icon pattern is confirmed gone — it may turn out to be the same root cause (a pin captured during/after a
+  crashed, not cleanly-quit, instance).
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-18 — Add "Reference Model" menu: pick a local model without the chat file
 
 - **Context:** `shim/chat_bridge.c` already lets `~/tools/farsight/chat` route Foresight's chat/summaries
