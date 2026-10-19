@@ -16,6 +16,63 @@
 
 > غیررسمی است و ارتباطی با گوگل ندارد. هیچ کد یا مدلی از گوگل در آن نیست.
 
+## در عمل ببینید
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+<img src="docs/images/meetings-en-ui-fa-summary.jpg" width="100%" alt="بخشِ جلسه‌های Foresight به انگلیسی، با خلاصه‌ای که به فارسی نوشته شده">
+
+<p dir="rtl">رابطِ انگلیسی — خلاصه‌ی هوشمند همچنان کاملاً روان به فارسی نوشته می‌شود</p>
+
+</td>
+<td width="50%">
+
+<img src="docs/images/meetings-fa-ui.jpg" width="100%" alt="بخشِ جلسه‌های Foresight، کاملاً فارسی و راست‌چین">
+
+<p dir="rtl">رابطِ فارسی و راست‌چین — پیش‌فرضِ فارسایت</p>
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+<img src="docs/images/knowledge-sources-en.jpg" width="100%" alt="بخشِ منابع دانش به انگلیسی">
+
+<p dir="rtl">رابطِ انگلیسی</p>
+
+</td>
+<td width="50%">
+
+<img src="docs/images/knowledge-sources-fa.jpg" width="100%" alt="بخشِ منابع دانش به فارسی">
+
+<p dir="rtl">رابطِ فارسی</p>
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+<img src="docs/images/stats-en.jpg" width="100%" alt="بخشِ آمار به انگلیسی">
+
+<p dir="rtl">رابطِ انگلیسی</p>
+
+</td>
+<td width="50%">
+
+<img src="docs/images/stats-fa.jpg" width="100%" alt="بخشِ آمار به فارسی، با رقم‌های فارسی">
+
+<p dir="rtl">رابطِ فارسی — حتی عددها هم به رقمِ فارسی تبدیل می‌شن</p>
+
+</td>
+</tr>
+</table>
+
+<div dir="rtl">
+
 ## پیش‌نیازها
 
 - مک با تراشه‌ی Apple Silicon
@@ -81,10 +138,11 @@ grep -E "config:|asr" ~/Library/Logs/farsight/shim.log | tail
 
 - **فقط فارسی:** کلمه‌های انگلیسی وسط جمله با حروف فارسی و تقریبی نوشته می‌شوند. برای جلسه‌ی انگلیسی، Foresight را معمولی باز کنید.
 - **زبان برنامه:** `launch.sh` برنامه را فارسی و راست‌چین باز می‌کند. برای انگلیسی: `FARSIGHT_LANG=en ./launch.sh`. چند برچسب مثل «Start transcribing» را خود گوگل ترجمه نکرده (چون این‌ها را خودِ Foresight با Flutter رسم می‌کند، نه چیزی که فارسایت بتواند بی‌خطر تغییر بدهد). بعد از اجرای فارسایت، خودِ منوبار Foresight (کنار Window) یک منوی «Language» دارد با فارسی/English — انتخاب کنید و Foresight خودش بدون هیچ فلش و بدون نیاز به ترمینال دوباره با همان زبان باز می‌شود. این انتخاب بعد از بستن کامل و باز کردن عادی (از Dock، Spotlight یا login item) هم می‌ماند، چون به‌جای صرفاً آرگومان خط‌فرمان، مستقیم روی دیسک به‌عنوان یک preference واقعی زیر bundle ID خودِ Foresight نوشته می‌شود — چون Foresight چند ثانیه بعد از هر اجرا خودش را دوباره اجرا می‌کند و آرگومان‌های خودش را از دست می‌دهد.
+  <br><img src="docs/images/language-menu.jpg" width="420" alt="منوی Language تو منوبارِ خودِ Foresight، با فارسی و English">
 - **عبارت به عبارت:** متن بعد از هر مکث (حدود ۰.۶ ثانیه سکوت) می‌آید، نه کلمه به کلمه.
 - **آپدیت Foresight:** ممکن است چیزی را که فارسایت به آن تکیه دارد جابه‌جا کند. اگر بعد از آپدیت متن فارسی ناپدید شد، `shim.log` را ببینید. بدون فارسایت، برنامه به انگلیسی کار می‌کند.
 
-## چطور کار می‌کند
+## معماری
 
 Foresight با Flutter ساخته شده و برای رونویسی، یک کتابخانه‌ی C گوگل را صدا می‌زند. مجوزهای برنامه اجازه‌ی تزریق کتابخانه (`DYLD_INSERT_LIBRARIES`) را می‌دهند، پس `launch.sh` برنامه را با `libfarsight.dylib` اجرا می‌کند.
 
@@ -101,6 +159,37 @@ Foresight با Flutter ساخته شده و برای رونویسی، یک کت�
 چت و خلاصه‌ی جلسه در Foresight با مدل Gemma خودش اجرا می‌شود که انگلیسی جواب می‌دهد. فارسایت می‌تواند این‌ها را به هر سرور محلی سازگار با OpenAI (مثل llama.cpp یا LM Studio) بفرستد.
 
 بعد از اجرای فارسایت، منوبار خودِ Foresight یک منوی «Reference Model» دارد (کنار Language) — خودش Ollama، LM Studio و یک سرورِ llama.cpp را روی پورت‌های معمولشان پیدا می‌کند و مدل‌های نصب‌شده‌شان را لیست می‌کند، به‌علاوه‌ی گزینه‌ی «Add…» برای هر سرور/مدل دیگر. انتخاب از این منو Foresight را با همان مدل دوباره باز می‌کند، دقیقاً مثل منوی Language — بدون نیاز به ترمینال.
+
+</div>
+
+<img src="docs/images/reference-model-menu.jpg" width="420" alt="منوی Reference Model تو منوبارِ خودِ Foresight، با لیستِ مدل‌های محلیِ شناسایی‌شده">
+
+<div dir="rtl">
+
+مدلِ Gemmaی داخلیِ Foresight کوچیکه و فارسیش قابل‌قبوله ولی یه‌خرده خشک؛ یه مدلِ محلیِ بزرگ‌تر خیلی روان‌تر می‌نویسه:
+
+</div>
+
+<table>
+<tr>
+<td width="50%">
+
+<img src="docs/images/summary-gemma-default.jpg" width="100%" alt="خلاصه‌ی فارسیِ جلسه با مدلِ پیش‌فرضِ Gemmaی Foresight">
+
+<p dir="rtl">پیش‌فرض — Gemmaی داخلیِ Foresight</p>
+
+</td>
+<td width="50%">
+
+<img src="docs/images/summary-qwen-lmstudio.jpg" width="100%" alt="همون خلاصه، این‌بار با مدلِ محلیِ Qwen2.5-7B از طریقِ LM Studio">
+
+<p dir="rtl">مدلِ محلیِ Qwen2.5-7B، از طریقِ LM Studio — فارسیِ به‌مراتب روان‌تر</p>
+
+</td>
+</tr>
+</table>
+
+<div dir="rtl">
 
 برای سروری روی پورتِ دیگر، یا فیلدهای اضافه‌ای که این منو نمی‌دهد، به‌جایش یک خط در فایل `~/tools/farsight/chat` بنویسید:
 

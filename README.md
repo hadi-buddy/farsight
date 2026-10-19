@@ -16,6 +16,59 @@ Farsight adds **live Persian transcription** to [Google AI Edge Foresight](https
 
 > Unofficial. Not affiliated with or endorsed by Google. Contains no Google code or model weights.
 
+## See it in action
+
+<table>
+<tr>
+<td width="50%">
+
+<img src="docs/images/meetings-en-ui-fa-summary.jpg" width="100%" alt="Foresight's Meetings view in English, with an AI summary written in Persian">
+
+English interface — the AI summary still comes back in fluent Persian
+
+</td>
+<td width="50%">
+
+<img src="docs/images/meetings-fa-ui.jpg" width="100%" alt="Foresight's Meetings view, fully in Persian and right-to-left">
+
+Persian interface, right-to-left — Farsight's default
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+<img src="docs/images/knowledge-sources-en.jpg" width="100%" alt="Knowledge Sources view in English">
+
+English interface
+
+</td>
+<td width="50%">
+
+<img src="docs/images/knowledge-sources-fa.jpg" width="100%" alt="Knowledge Sources view in Persian">
+
+Persian interface
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+<img src="docs/images/stats-en.jpg" width="100%" alt="Stats view in English">
+
+English interface
+
+</td>
+<td width="50%">
+
+<img src="docs/images/stats-fa.jpg" width="100%" alt="Stats view in Persian, with Persian digits">
+
+Persian interface — even the numbers switch to Persian digits
+
+</td>
+</tr>
+</table>
+
 ## Requirements
 
 - macOS on Apple Silicon
@@ -64,10 +117,11 @@ With `dump = 1`, every phrase is saved as a WAV file plus its transcript in `~/L
 
 - **Persian only.** English words inside Persian speech come out as Persian-script approximations. For an English meeting, open Foresight normally (without `launch.sh`).
 - **UI language.** `launch.sh` opens Foresight in Persian (right-to-left). Use `FARSIGHT_LANG=en ./launch.sh` for English or `FARSIGHT_LANG=system` to follow macOS. A few labels, such as "Start transcribing", are not translated by Google (they're drawn by Foresight's own Flutter UI, which Farsight does not — and, as of investigating it, cannot safely — modify). Once Farsight is running, Foresight's own menu bar has a "Language" menu (next to Window) with فارسی/English — pick one and Foresight relaunches itself in that language, with no flash and no terminal needed. The choice also survives a full quit and a normal reopen (Dock, Spotlight, login item): it's written as a real on-disk preference under Foresight's own bundle ID, not just passed as a launch argument, since Foresight re-execs itself shortly after every cold start and loses its own argv in the process.
+  <br><img src="docs/images/language-menu.jpg" width="420" alt="The Language menu in Foresight's own menu bar, showing فارسی and English">
 - **Phrase by phrase.** Text arrives after each pause (about 0.6 s of silence), not word by word.
 - **Foresight updates** can move what the shim relies on. If Persian text disappears after an update, check `shim.log`; without Farsight the app keeps working in English.
 
-## How it works
+## Architecture
 
 Foresight is a Flutter app. Its Dart code reaches Google's transcription library through a C API (`OdmlSpeechProcessorTranscribe`, `OdmlSpeechProcessorFinishStream`, …) resolved at runtime with `dlsym`. The app's entitlements allow `DYLD_INSERT_LIBRARIES`, so `launch.sh` starts it with `shim/libfarsight.dylib` loaded first.
 
@@ -84,6 +138,29 @@ If the Persian model is missing or fails to load, the shim falls back to SenseVo
 Foresight's chat and meeting summaries normally run on its built-in Gemma model, which answers in English. The shim can route them to any local OpenAI-compatible server (llama.cpp, LM Studio, Ollama's OpenAI endpoint, …).
 
 Once Farsight is running, Foresight's own menu bar has a "Reference Model" menu (next to Language) — it auto-detects any of Ollama, LM Studio or a llama.cpp server running on their usual ports and lists their installed models, plus "Add…" for any other OpenAI-compatible server/model. Picking one relaunches Foresight on it, same as the Language menu; no terminal needed.
+
+<img src="docs/images/reference-model-menu.jpg" width="420" alt="The Reference Model menu in Foresight's own menu bar, listing auto-detected local models">
+
+Foresight's built-in Gemma is small, and its Persian is serviceable but stiff; a larger local model reads noticeably more natural:
+
+<table>
+<tr>
+<td width="50%">
+
+<img src="docs/images/summary-gemma-default.jpg" width="100%" alt="A Persian meeting summary written by Foresight's default Gemma model">
+
+Default — Foresight's built-in Gemma
+
+</td>
+<td width="50%">
+
+<img src="docs/images/summary-qwen-lmstudio.jpg" width="100%" alt="The same meeting summarized by a local Qwen2.5-7B model via LM Studio">
+
+A local Qwen2.5-7B model, via LM Studio — more fluent Persian
+
+</td>
+</tr>
+</table>
 
 For a server on another port, or extra request fields the menu doesn't offer, put one line in `~/tools/farsight/chat` by hand instead:
 
