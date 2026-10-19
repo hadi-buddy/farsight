@@ -459,7 +459,11 @@ static size_t on_data(void *p, size_t s, size_t n, void *u) {
 
 // Foresight's meeting brief / notes prompts are English, so the model answers in
 // English even for a Chinese or Persian transcript. Ask for the transcript's language,
-// keeping the template headings the app expects.
+// keeping the template headings the app expects. This also covers prompts that are
+// not meeting summaries at all (e.g. Live Enhanced Notes, which sends the user's own
+// shorthand text with no <meeting_transcript>-style tag around it) — transcript_share()
+// already falls back to scoring the whole message when no such tag is present, so the
+// only thing gating that path used to be this function requiring one anyway.
 static void match_transcript_language(cJSON *msgs) {
   const cJSON *last = NULL, *m;
   cJSON_ArrayForEach(m, msgs) {
@@ -469,8 +473,6 @@ static void match_transcript_language(cJSON *msgs) {
   const cJSON *content = cJSON_GetObjectItemCaseSensitive(last, "content");
   if (!cJSON_IsString(content)) return;
   const char *t = content->valuestring;
-  if (!strstr(t, "<meeting_transcript>") && !strstr(t, "<transcript_chunk>") && !strstr(t, "<new_transcript_section>"))
-    return;
   static const char note_zh[] =
       "\n\nLanguage: the transcript is in Chinese. Write all of your output in Simplified Chinese. "
       "Keep the template's markdown headings (such as \"# Overview\" and \"# Details\") and any "

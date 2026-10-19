@@ -2,6 +2,25 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-19 — Live Enhanced Notes answered in English for Persian shorthand
+
+- **Context:** reported and reproduced with real screenshots — typed Persian shorthand into
+  Foresight's "Live Enhanced Notes" panel (the `EmbeddingGemma 2`-powered feature that turns
+  shorthand into polished notes as you type), and the enhanced output came back in English
+  while the shorthand itself, and the live transcript alongside it, were both correctly
+  Persian. `shim/chat_bridge.c`'s language-matching only ran for prompts whose last user
+  message contained one of three tags (`<meeting_transcript>`, `<transcript_chunk>`,
+  `<new_transcript_section>`) — all specific to the meeting-summary feature. Live Enhanced
+  Notes sends the user's own shorthand text with no such tag, so `match_transcript_language`
+  returned before ever checking its actual language.
+- **Change:** removed that tag-gated early return in `match_transcript_language`
+  (`shim/chat_bridge.c`). `transcript_share()` already falls back to scoring the whole
+  message when no transcript tag is present, so this was the only thing standing between
+  that existing fallback and untagged prompts like Live Enhanced Notes (and, incidentally,
+  plain "Ask" questions, which had the same gap). No change to the tagged path's behavior —
+  it still isolates just the `<meeting_transcript>`-style content as before.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-19 — Reference Model: also probe LM Studio on port 1235
 
 - **Context:** Reference Model menu showed "No local servers detected" even with LM Studio's local server
