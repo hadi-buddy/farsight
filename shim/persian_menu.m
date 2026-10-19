@@ -25,6 +25,7 @@
 
 #import <AppKit/AppKit.h>
 #import "relaunch_throttle.h"
+#import "relaunch.h"
 
 extern void logf_(const char *fmt, ...);
 
@@ -267,14 +268,8 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
 }
 
 - (void)relaunchWithLanguage:(NSString *)lang {
-  NSURL *appURL = NSRunningApplication.currentApplication.bundleURL;
-  if (!appURL) {
-    logf_("menu: could not resolve Foresight's own bundle URL, cannot relaunch");
-    return;
-  }
-
   // Must happen here, in this (still-running, about-to-quit) process, before
-  // the new instance is spawned below -- see DeleteSavedState()'s comment.
+  // the new instance is spawned -- see DeleteSavedState()'s comment.
   DeleteSavedState();
 
   NSMutableDictionary<NSString *, NSString *> *env = [NSMutableDictionary dictionary];
@@ -291,25 +286,8 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
     [args addObject:[NSString stringWithFormat:@"(%@)", lang]];
   }
 
-  NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
-  config.environment = env;
-  config.arguments = args;
-  config.createsNewApplicationInstance = YES;
-
-  logf_("menu: language set to %s, opening a new Foresight instance", lang.UTF8String);
-  [NSWorkspace.sharedWorkspace openApplicationAtURL:appURL
-                                       configuration:config
-                                   completionHandler:^(NSRunningApplication *app, NSError *openErr) {
-                                     if (openErr) {
-                                       logf_("menu: relaunch failed: %s", openErr.localizedDescription.UTF8String);
-                                       return;
-                                     }
-                                     logf_("menu: new Foresight instance running (pid %d), quitting this one",
-                                           app.processIdentifier);
-                                     dispatch_async(dispatch_get_main_queue(), ^{
-                                       [NSApp terminate:nil];
-                                     });
-                                   }];
+  logf_("menu: language set to %s, relaunching", lang.UTF8String);
+  relaunch_foresight(env, args);
 }
 
 - (void)selectFarsi:(id)sender { [self setLanguage:@"fa"]; }

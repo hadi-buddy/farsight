@@ -17,13 +17,15 @@
 // ~/tools/farsight/chat ("<base_url> [model]", or "off") -- chat_bridge.c
 // itself needed no changes. Like the Language menu, chat_bridge_init() only
 // reads that file once, at process startup (see its own comment), so picking
-// a different model relaunches Foresight the same way -- NSWorkspace with
-// createsNewApplicationInstance = YES, never NSTask/launch.sh (see
-// persian_menu.m for why). The relaunch also carries the current UI language
-// (read from ~/tools/farsight/lang) so switching models never resets it.
+// a different model relaunches Foresight the same way, through the shared
+// relaunch_foresight() helper (see relaunch.m for why it quits first instead
+// of overlapping old/new instances). The relaunch also carries the current
+// UI language (read from ~/tools/farsight/lang) so switching models never
+// resets it.
 
 #import <AppKit/AppKit.h>
 #import "relaunch_throttle.h"
+#import "relaunch.h"
 
 extern void logf_(const char *fmt, ...);
 
@@ -319,17 +321,9 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
   if (v && *v) env[key] = [NSString stringWithUTF8String:v];
 }
 
-// Same relaunch mechanism as persian_menu.m's Language menu (see its
-// comment for why NSWorkspace + createsNewApplicationInstance = YES, never
-// NSTask/launch.sh). Carries the current UI language along so switching
-// models never resets it.
+// Carries the current UI language along so switching models never resets it.
+// See relaunch.m for the actual relaunch mechanism.
 - (void)relaunch {
-  NSURL *appURL = NSRunningApplication.currentApplication.bundleURL;
-  if (!appURL) {
-    logf_("model-menu: could not resolve Foresight's own bundle URL, cannot relaunch");
-    return;
-  }
-
   NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
   if (bundleID) {
     NSString *savedStatePath =
@@ -354,25 +348,8 @@ static void AddEnvIfSet(NSMutableDictionary<NSString *, NSString *> *env, NSStri
     args = [NSMutableArray array];
   }
 
-  NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
-  config.environment = env;
-  config.arguments = args;
-  config.createsNewApplicationInstance = YES;
-
-  logf_("model-menu: reference model changed, opening a new Foresight instance");
-  [NSWorkspace.sharedWorkspace openApplicationAtURL:appURL
-                                       configuration:config
-                                   completionHandler:^(NSRunningApplication *app, NSError *openErr) {
-                                     if (openErr) {
-                                       logf_("model-menu: relaunch failed: %s", openErr.localizedDescription.UTF8String);
-                                       return;
-                                     }
-                                     logf_("model-menu: new Foresight instance running (pid %d), quitting this one",
-                                           app.processIdentifier);
-                                     dispatch_async(dispatch_get_main_queue(), ^{
-                                       [NSApp terminate:nil];
-                                     });
-                                   }];
+  logf_("model-menu: reference model changed, relaunching");
+  relaunch_foresight(env, args);
 }
 
 @end

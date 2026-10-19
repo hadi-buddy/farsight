@@ -2,6 +2,29 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-19 — Relaunch: quit first, then open fresh (was: open new, then quit old)
+
+- **Context:** with Foresight pinned to the Dock, every Language/Reference Model switch added a *second*,
+  separate icon to the Dock's recents section instead of reusing the pinned tile — on top of yesterday's
+  crash report (`SIGSEGV` inside Foresight's own `SSOAuthPlugin.signOut`) that happened mid-relaunch. Both
+  trace to the same design choice: `relaunchWithLanguage:`/`relaunch` opened the *new* instance first
+  (`NSWorkspace openApplicationAtURL` with `createsNewApplicationInstance = YES`) and only quit the old one
+  once the new one was confirmed running — a deliberate brief overlap, to avoid a window with literally no
+  Foresight process up. That overlap is exactly what both bugs needed: macOS evidently doesn't fold a
+  freshly-opened instance into an already-pinned icon's Dock slot while the old one is still around (hence
+  the extra recents icon), and it's also when Foresight's own pre-existing sign-out race got hit hardest.
+- **Change:** `shim/relaunch.m`/`.h` (new) replaces both menus' own `NSWorkspace`/`createsNewApplicationInstance`
+  logic with a single shared `relaunch_foresight(env, args)`. New order: quit first
+  (`[NSApp terminate:nil]`), *then* open a fresh instance — so there's never a moment with two instances,
+  and a relaunch lands back in the one pinned Dock slot like any other app restart. Since our own process
+  can't reliably do anything (including launch another process) once it starts quitting, the actual `open`
+  call runs from a **detached** helper (`NSTask` running `/bin/sh -c 'sleep 1.5 && exec /usr/bin/open "$@"'`,
+  not a child that dies with us) with a short delay -- best-effort margin for Foresight's own quit (crash
+  risk included) to finish before the new instance starts, not a hard guarantee, but it only needs to land
+  *after* our exit, not race it. `persian_menu.m`'s `relaunchWithLanguage:` and `model_menu.m`'s `relaunch`
+  now just build the env/args and call the shared helper.
+- **Status:** written, not yet verified on macOS.
+
 ## 2026-10-19 — Drop the separate launcher app entirely: pin Foresight.app itself instead
 
 - **Context:** the previous entry's fix (`install-launcher.sh`, a hand-built `.app` with a stable bundle

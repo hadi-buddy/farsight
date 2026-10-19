@@ -105,6 +105,7 @@ or `off` to disable it, then relaunch. When a transcript is mostly Persian, the 
 | `shim/persian_date.c` | Today's date in the Jalali (Solar Hijri) calendar, prepended to Persian summaries |
 | `shim/persian_menu.m` | "Language" menu in Foresight's own menu bar (فارسی/English, relaunches on change) |
 | `shim/model_menu.m` | "Reference Model" menu: auto-detected local servers + "Add…", relaunches on change |
+| `shim/relaunch.m` | Shared relaunch (quit, then open fresh) used by both menus |
 | `shim/chat_bridge.c` | Optional chat/summaries on a local server |
 | `setup-persian.sh` | Downloads the Persian engine |
 | `launch.sh`, `watcher.sh`, `install-watcher.sh` | Launcher and auto-relaunch agent |
