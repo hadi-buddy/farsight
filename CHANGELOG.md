@@ -19,7 +19,7 @@ Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
   that existing fallback and untagged prompts like Live Enhanced Notes (and, incidentally,
   plain "Ask" questions, which had the same gap). No change to the tagged path's behavior —
   it still isolates just the `<meeting_transcript>`-style content as before.
-- **Status:** written, not yet verified on macOS.
+- **Status:** verified on macOS — Persian shorthand now gets a Persian Live Enhanced Notes reply.
 
 ## 2026-10-19 — Reference Model: also probe LM Studio on port 1235
 
