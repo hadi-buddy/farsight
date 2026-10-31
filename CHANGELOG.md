@@ -2,6 +2,40 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-31 — Wire the Avan port into the shim's actual output (first time it runs)
+
+- **Context:** everything ported so far (spoken punctuation, extended ZWNJ, digit ITN,
+  lexicon correction, sound-alike respelling) was written and unit-tested but not called
+  from anywhere real — Farsight's live transcription was unaffected. Confirmed by the
+  user's own screenshots: «ریپو», «گیت هاب» weren't being touched.
+- **Change:** `shim/sensevoice_engine.c`'s `postprocess()` now runs the full chain, in the
+  same order as Avan's `polish.js`: spoken symbols → character normalization → lexicon
+  correction → sound-alike respelling → spoken-number ITN → literal-digit ITN → ZWNJ →
+  sentence punctuation → symbols restored. `sv_available()` loads `fa-words.txt` and builds
+  the sound index once (from `<home>/tools/farsight`, alongside the ASR models) — if the
+  data file isn't there (an older checkout), those two steps are skipped rather than
+  failing the whole transcript.
+- **Added `persian_normalize_chars()` to `shim/persian_text.c`/`.h`:** splits the character-
+  mapping half of the existing `persian_fix()` out as its own public function, since the
+  polish-chain order needs letter normalization *early* (before lexicon matching, which
+  compares literal spellings) and ZWNJ joining *late* (after lexicon/ITN have run) — two
+  different points in the pipeline that `persian_fix()` used to do together.
+- **Verified with a real compile + link** against the actual pinned sherpa-onnx v1.13.8
+  header (fetched from its GitHub release tag, not guessed) and a new
+  `shim/test/postprocess_test.c` that runs the exact same call sequence against the real
+  `fa-words.txt`: «گیت هاب رو چک کن و بیست و پنج تا فایل ساختم» → «گیت‌هاب رو چک کن و ۲۵ تا
+  فایل ساختم.» (lexicon-corrected spelling, number converted, sentence-final «.» added, all
+  in one pass) and «گیت هاب دات کام» → «گیت‌هاب.com.» (spoken-symbol placeholder survives
+  lexicon correction and ITN intact, then resolves correctly at the end). This is the first
+  time any of this port has actually run as a connected chain, not just its own isolated
+  unit tests.
+- **Still not ported:** `latin.js` (curated English-term substitution — this is what will
+  fix «ریپو» → repo, «جاوااسکریپت» → JavaScript) and `english.js` (systematic English-word
+  detection). Both slot into the same chain, right after digit ITN, once written.
+- **Status:** written and unit/integration-tested on Linux (compiles and links clean
+  against the real header; the actual ASR model and `sherpa-onnx` itself can only run on
+  macOS), not yet rebuilt/run on the user's Mac.
+
 ## 2026-10-31 — Lexicon correction + sound-alike respelling (second slice)
 
 - **Added `shim/persian_sound.c`/`.h`:** shared codepoint-level primitives ported from

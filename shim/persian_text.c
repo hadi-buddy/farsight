@@ -218,6 +218,11 @@ char *persian_punctuate(const char *text, int complete) {
   return out;
 }
 
+char *persian_normalize_chars(const char *text) {
+  if (!text) return NULL;
+  return map_chars(text);
+}
+
 char *persian_fix(const char *text) {
   if (!text) return NULL;
   char *a = map_chars(text);

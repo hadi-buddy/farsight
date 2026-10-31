@@ -4,6 +4,13 @@
 // zero-width non-joiners for «می‌», «‌ها» and «ه‌ای». Returns a malloc'ed string.
 char *persian_fix(const char *text);
 
+// Just the character mapping half of persian_fix() (Arabic yeh/kaf/digits ->
+// Persian forms), without the ZWNJ join. Useful early in a longer pipeline
+// (lexicon matching, etc.) that wants standard Persian letter forms before
+// its own passes, with ZWNJ joining saved for the end. Returns a malloc'ed
+// string.
+char *persian_normalize_chars(const char *text);
+
 // Adds sentence-final «.» or «؟» and «،» before «اما/ولی/چون/یعنی». One call per
 // phrase. complete = 0 when the phrase was cut by the length limit rather than a
 // pause: no final «.» then. Returns a malloc'ed string.

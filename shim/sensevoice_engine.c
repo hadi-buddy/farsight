@@ -18,6 +18,8 @@
 #include <time.h>
 
 #include "persian_itn.h"
+#include "persian_lexicon.h"
+#include "persian_punctuation.h"
 #include "persian_text.h"
 #include "sherpa-onnx-c-api.h"
 
@@ -89,6 +91,12 @@ static SherpaOnnxVadModelConfig g_vad_cfg;
 static Stream g_streams[MAX_STREAMS];
 static int g_lang;  // SV_LANG_*
 static char g_dir[1024], g_model[1200], g_tokens[1200], g_vad_model[1200], g_lib[1200];
+// Lexicon/sound-alike data for Persian post-processing (shim/data/fa-words.txt),
+// loaded once from <home>/tools/farsight. NULL if the data isn't there yet
+// (an older checkout) -- post-processing just skips those steps then.
+static PersianWords *g_words;
+static SoundIndex *g_sound_idx;
+static int g_lexicon_load_tried;
 
 static int exists(const char *p) {
   struct stat st;
@@ -247,6 +255,18 @@ static void dump_phrase(const float *x, int n, const char *text) {
 int sv_available(const char *home, int lang) {
   load_tuning(home);
   g_lang = lang;
+  if (lang == SV_LANG_PERSIAN && !g_lexicon_load_tried) {
+    g_lexicon_load_tried = 1;
+    char repo[1024];
+    snprintf(repo, sizeof repo, "%s/tools/farsight", home);
+    g_words = persian_words_load(repo);
+    if (g_words) {
+      g_sound_idx = persian_sound_index_build(repo, 30);
+      logf_("lexicon: fa-words.txt loaded%s", g_sound_idx ? ", sound index built" : "");
+    } else {
+      logf_("lexicon: fa-words.txt not found, skipping lexicon correction");
+    }
+  }
   snprintf(g_dir, sizeof g_dir, "%s/Library/Application Support/farsight", home);
   if (lang == SV_LANG_PERSIAN) {
     // Prefer Shenava Koochik (114M, more accurate); fall back to Rizeh (32M).
@@ -306,17 +326,55 @@ static void ring_push(Stream *s, const float *x, int n) {
   s->fed += n;
 }
 
-// Persian post-processing: spoken numbers -> digits, orthography (ZWNJ, ی/ک),
-// then punctuation (unless "punctuation = 0" in the tuning file).
+// Persian post-processing, in the same order as Avan's polish.js: spoken
+// punctuation -> symbols, character normalization, lexicon correction,
+// sound-alike respelling, spoken-number and literal-digit ITN, ZWNJ
+// orthography, sentence punctuation, then symbols restored. Latin-term and
+// systematic-English detection (toLatin/englishWords) aren't ported yet, so
+// that step is skipped -- everything else already runs.
 static char *postprocess(const char *raw, int complete) {
   if (g_lang != SV_LANG_PERSIAN) return strdup(raw);
-  char *a = persian_itn(raw);
-  char *b = persian_fix(a);
-  free(a);
-  if (!T.punctuation) return b;
-  char *c = persian_punctuate(b, complete);
-  free(b);
-  return c;
+
+  char *s = persian_spoken_symbols(raw);
+
+  char *s2 = persian_normalize_chars(s);
+  free(s);
+  s = s2;
+
+  if (g_words) {
+    s2 = persian_correct_with_lexicon(s, g_words);
+    free(s);
+    s = s2;
+    if (g_sound_idx) {
+      s2 = persian_fix_sound_alikes(s, g_words, g_sound_idx);
+      free(s);
+      s = s2;
+    }
+  }
+
+  s2 = persian_itn(s);
+  free(s);
+  s = s2;
+
+  s2 = persian_itn_digits(s);
+  free(s);
+  s = s2;
+
+  // persian_fix() also re-applies character normalization (harmless,
+  // already-normalized text is a no-op there) on top of the ZWNJ join.
+  s2 = persian_fix(s);
+  free(s);
+  s = s2;
+
+  if (T.punctuation) {
+    s2 = persian_punctuate(s, complete);
+    free(s);
+    s = s2;
+  }
+
+  s2 = persian_restore_symbols(s);
+  free(s);
+  return s2;
 }
 
 // ---- duplicate phrases across streams --------------------------------------
