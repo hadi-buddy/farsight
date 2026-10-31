@@ -2,6 +2,42 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-31 — Lexicon correction + sound-alike respelling (second slice)
+
+- **Added `shim/persian_sound.c`/`.h`:** shared codepoint-level primitives ported from
+  `lexicon.js` — `persian_sound_key()` (collapses Persian letters that sound alike: ث/ص→س,
+  ذ/ض/ظ→ز, ط→ت, غ→ق, ح→ه, vowel-carrier/hamza forms→ا, drops ZWNJ/spaces/diacritics),
+  `persian_edit_distance()` (weighted Levenshtein: soft vowel-carrier insert/delete and
+  near-sound substitution cost 0.5, everything else 1, with an early-exit bound), and
+  `persian_lm_key()` (the lighter normalization `itn.js`/`lm.js` use for frequency-list
+  lookups — real alternate spellings only, not sound-alikes). All UTF-8 codepoints are
+  verified against Python's own decoder before use, not hand-typed from memory.
+- **Added `shim/strmap.c`/`.h`:** a small chained-hashtable string→long map, needed because
+  `shim/data/fa-words.txt` is 96k lines and `correctWithLexicon`/`fixSoundAlikes` both do a
+  membership/frequency lookup per word.
+- **Added `shim/persian_lexicon.c`/`.h`:** the `LEXICON` list (names/products/tech terms,
+  ported from `lexicon.js`), `persian_words_load()` (reads `fa-words.txt` into a word→count
+  map), `persian_sound_index_build()` (sound key → most frequent word with 30+ occurrences,
+  `buildSoundIndex`'s port), `persian_correct_with_lexicon()` (`correctWithLexicon`'s port —
+  replaces a 1–3 word span that sounds like a lexicon entry with its spelling, leaving real
+  known words alone unless they sound identical), and `persian_fix_sound_alikes()`
+  (`fixSoundAlikes`'s port).
+- **Verified against the real `fa-words.txt`** (not a fixture) in `shim/test/lexicon_test.c`:
+  an exact lexicon spelling is left alone, a sound-alike misspelling of one gets corrected
+  («سباییده» → «صباایده»), a real Persian word that merely sounds close to an entry is *not*
+  force-corrected («کمیته» stays «کمیته» despite being near «کامیت»), and an unknown word gets
+  respelled to the common word it sounds identical to («متمئن» → «مطمئن»). `shim/test/sound_test.c`
+  covers the primitives directly.
+- Two real bugs this caught before they shipped: a double-`cp_free` in the sound-index
+  builder, and `persian_words_load` hashing raw file bytes as the lookup key while
+  `persian_words_has` normalized its query with `persian_lm_key` first — a mismatch that
+  would have made every lookup silently miss. Both fixed before committing, not after.
+- **Not done yet:** curated English-term/acronym substitution (`latin.js`'s `toLatin`),
+  systematic English-word detection (`english.js`), and wiring any of this chain (this slice
+  included) into `sensevoice_engine.c`'s actual output path.
+- **Status:** written and unit-tested against real data, not yet verified end-to-end on
+  macOS, not yet wired into the shim's output.
+
 ## 2026-10-31 — Start porting Avan's text-polish quality improvements (partial)
 
 - **Context:** `hadi-buddy/avan-extension` (a Chrome extension for claude.ai) fine-tuned Shenava's
