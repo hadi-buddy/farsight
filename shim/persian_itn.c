@@ -126,6 +126,69 @@ static int parse_number(const Tok *t, int n, int i, long long *value) {
   return used;
 }
 
+static int is_ascii_digit(unsigned char c) { return c >= '0' && c <= '9'; }
+static int is_sword_char(unsigned char c) {  // A-Za-z0-9.+#-, the charset an English-ish token is made of
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || is_ascii_digit(c) || c == '.' || c == '+' || c == '#' || c == '-';
+}
+static int is_sword_letter(unsigned char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'); }
+
+// Does the run of is_sword_char() bytes immediately before `end` (stopping at
+// the first byte that isn't one) contain at least one A-Za-z letter? Mirrors
+// JS /[A-Za-z][A-Za-z0-9.+#-]*$/.test(before): a trailing run with no letter
+// in it (e.g. a bare "10") can't satisfy that pattern, one with a letter
+// anywhere in the run can (the regex just starts its match at that letter).
+static int trailing_run_has_letter(const char *text, size_t end) {
+  size_t p = end;
+  int has_letter = 0;
+  while (p > 0 && is_sword_char((unsigned char)text[p - 1])) {
+    if (is_sword_letter((unsigned char)text[p - 1])) has_letter = 1;
+    p--;
+  }
+  return has_letter;
+}
+
+// Latin digits -> Persian digits ("1 2 3" -> "۱ ۲ ۳"), skipping a run glued to
+// or right after an English-looking token ("Python 3", "v2", "0.74" after a
+// name stays Latin). Numbers already spelled as words are handled separately
+// by persian_itn(); this is for literal digit characters in the transcript.
+char *persian_itn_digits(const char *text) {
+  if (!text) return NULL;
+  size_t L = strlen(text);
+  char *out = malloc(L * 2 + 16);
+  size_t o = 0;
+  for (size_t i = 0; i < L;) {
+    unsigned char c = (unsigned char)text[i];
+    if (is_ascii_digit(c) && (i == 0 || !is_sword_char((unsigned char)text[i - 1]))) {
+      size_t j = i;
+      while (j < L && is_ascii_digit((unsigned char)text[j])) j++;
+      // allow internal separators . , / : followed by more digits
+      while (j < L && strchr(".,/:", text[j]) && j + 1 < L && is_ascii_digit((unsigned char)text[j + 1])) {
+        j++;
+        while (j < L && is_ascii_digit((unsigned char)text[j])) j++;
+      }
+      size_t end = j;
+      int followed_by_alnum = end < L && (is_sword_letter((unsigned char)text[end]) || is_ascii_digit((unsigned char)text[end]));
+      if (!followed_by_alnum) {
+        size_t before_end = i;
+        while (before_end > 0 && text[before_end - 1] == ' ') before_end--;
+        int keep_latin = trailing_run_has_letter(text, before_end);
+        if (!keep_latin) {
+          for (size_t k = i; k < end; k++) {
+            if (text[k] == '.') { out[o++] = (char)0xD9; out[o++] = (char)0xAB; }  // ٫ U+066B
+            else if (is_ascii_digit((unsigned char)text[k])) { out[o++] = (char)0xDB; out[o++] = (char)(0xB0 + (text[k] - '0')); }
+            else out[o++] = text[k];
+          }
+          i = end;
+          continue;
+        }
+      }
+    }
+    out[o++] = text[i++];
+  }
+  out[o] = 0;
+  return out;
+}
+
 char *persian_itn(const char *text) {
   if (!text) return NULL;
   size_t L = strlen(text);

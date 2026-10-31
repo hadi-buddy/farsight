@@ -1,4 +1,4 @@
-// Tests for persian_itn. Build and run: shim/test/itn_test.sh
+// Tests for persian_itn and persian_itn_digits. Build and run: shim/test/itn_test.sh
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +11,15 @@ static void check(const char *in, const char *want) {
   char *got = persian_itn(in);
   if (strcmp(got, want) != 0) {
     printf("FAIL\n  in:   %s\n  want: %s\n  got:  %s\n", in, want, got);
+    fails++;
+  }
+  free(got);
+}
+
+static void check_digits(const char *in, const char *want) {
+  char *got = persian_itn_digits(in);
+  if (strcmp(got, want) != 0) {
+    printf("FAIL (digits)\n  in:   %s\n  want: %s\n  got:  %s\n", in, want, got);
     fails++;
   }
   free(got);
@@ -37,6 +46,16 @@ int main(void) {
   check("نه هزار", "۹۰۰۰");
   check("", "");
   check("hello world", "hello world");
+
+  check_digits("3 تا سیب و 10 تا پرتقال", "۳ تا سیب و ۱۰ تا پرتقال");
+  check_digits("ساعت 10:30 قرار داریم", "ساعت ۱۰:۳۰ قرار داریم");
+  check_digits("Python 3 و بعد v2 رو هم تست کن", "Python 3 و بعد v2 رو هم تست کن");
+  check_digits("نسخه v2.5 منتشر شد", "نسخه v2.5 منتشر شد");
+  // No English token right before it, so it converts (unlike "v0.74" or "version 0.74").
+  check_digits("قیمتش 0.74 دلاره", "قیمتش \xDB\xB0\xD9\xAB\xDB\xB7\xDB\xB4 دلاره");
+  check_digits("version 0.74 منتشر شد", "version 0.74 منتشر شد");
+  check_digits("", "");
+
   if (!fails) printf("all passed\n");
   return fails != 0;
 }

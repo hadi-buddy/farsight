@@ -1,0 +1,12 @@
+fa-words.txt — Persian word frequencies used as Avan's dictation language model.
+
+Derived from hermitdave/FrequencyWords, content/2018/fa/fa_full.txt
+https://github.com/hermitdave/FrequencyWords
+(word counts from the OpenSubtitles 2018 corpus, http://opus.nlpl.eu/OpenSubtitles2018.php)
+
+License of this data file: Creative Commons Attribution-ShareAlike 4.0 (CC BY-SA 4.0)
+https://creativecommons.org/licenses/by-sa/4.0/
+
+Changes: Arabic letter forms normalized to Persian (ي→ی, ك→ک, …), diacritics
+and ZWNJ removed, non-Persian entries dropped, counts merged, words with count < 4
+removed. Built by scripts/build-lm.py.

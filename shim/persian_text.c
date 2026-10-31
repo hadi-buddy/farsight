@@ -82,6 +82,16 @@ static int is_plural_suffix(Tok t) {
   return 0;
 }
 
+// Comparative / superlative: «بزرگ تر» -> «بزرگ‌تر», «بزرگ ترین» -> «بزرگ‌ترین».
+static int is_comparative_suffix(Tok t) { return tok_is(t, "تر") || tok_is(t, "ترین"); }
+
+// Possessive/indefinite after a word ending in ه: «خانه ای/ام/ات/اش» -> «خانه‌ای/‌ام/‌ات/‌اش».
+static int is_heh_suffix(Tok t) { return tok_is(t, "ای") || tok_is(t, "ام") || tok_is(t, "ات") || tok_is(t, "اش"); }
+
+// Compound nouns written with a half-space: نرم‌افزار, سخت‌افزار, برنامه‌نویس(ی).
+static int is_soft_hard_barname(Tok t) { return tok_is(t, "نرم") || tok_is(t, "سخت") || tok_is(t, "برنامه"); }
+static int is_afzar_nevis(Tok t) { return tok_is(t, "افزار") || tok_is(t, "نویس") || tok_is(t, "نویسی"); }
+
 static char *join_zwnj(const char *in) {
   size_t L = strlen(in);
   int cap = 16, n = 0;
@@ -105,7 +115,9 @@ static char *join_zwnj(const char *in) {
       Tok prev = t[i - 1], cur = t[i];
       if ((tok_is(prev, "می") || tok_is(prev, "نمی")) && starts_persian_letter(cur)) glue = 1;
       else if (is_plural_suffix(cur) && ends_persian_letter(prev)) glue = 1;
-      else if (tok_is(cur, "ای") && ends_with_heh(prev)) glue = 1;
+      else if (is_comparative_suffix(cur) && ends_persian_letter(prev)) glue = 1;
+      else if (is_heh_suffix(cur) && ends_with_heh(prev)) glue = 1;
+      else if (is_afzar_nevis(cur) && is_soft_hard_barname(prev)) glue = 1;
     }
     if (i > 0) {
       if (glue) {

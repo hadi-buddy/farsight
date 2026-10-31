@@ -2,6 +2,43 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-10-31 — Start porting Avan's text-polish quality improvements (partial)
+
+- **Context:** `hadi-buddy/avan-extension` (a Chrome extension for claude.ai) fine-tuned Shenava's
+  text output far beyond Farsight's: spoken-punctuation conversion, a better ZWNJ pass, lexicon
+  correction, English-term detection, and a word-LM-assisted decoder. Porting it here so Farsight's
+  output reaches the same quality. The decoder/beam-search half (`beam.js`/`lm.js`) turned out to
+  need a from-scratch onnxruntime + hand-written CTC decoder in C — confirmed by reading sherpa-onnx
+  v1.13.8's own source (`offline-recognizer-ctc-impl.h`: "Only greedy_search is supported at
+  present" for NeMo CTC models; the C API exposes no raw logits to decode ourselves either). That
+  is a much bigger, separate piece of work. This entry is the text-side half only, which doesn't
+  touch the decoder.
+- **Added `shim/data/`:** `fa-words.txt`, `fa-lexicon.txt`, `fa-stopwords.txt`, `en-sounds.txt`,
+  `en-pairs.txt` and their NOTICE files, copied from Avan's `extension/asr/`. Not wired into any
+  loader yet — needed by the not-yet-ported lexicon/English-detection modules.
+- **Added `shim/persian_punctuation.c`/`.h`:** spoken punctuation → characters (ported from
+  `punctuation.js`) — «بک اسلش»→`\`, «دات کام»→`.com`, «علامت سوال»→«؟», etc. Symbols the rest of
+  the chain would otherwise touch travel as private-use (U+E000..U+E004) placeholders and are
+  restored at the end. Verified with a real test harness (byte-level, via hex dump of the output —
+  the placeholders don't render in a terminal, so a visual check alone would have missed a bug).
+- **Extended `shim/persian_text.c`'s ZWNJ rules** (`join_zwnj`) to also cover comparative/
+  superlative («بزرگ تر»→«بزرگ‌تر»), «ه»+«ام/ات/اش» (Farsight only had «ه»+«ای» before), and the
+  compounds «نرم‌افزار»/«سخت‌افزار»/«برنامه‌نویس(ی)» — all from `orthography.js`. Farsight's plural
+  «ها» suffix list was already a superset of Avan's.
+- **Added `persian_itn_digits()` to `shim/persian_itn.c`/`.h`:** literal Latin digits in the
+  transcript → Persian digits ("3" → "۳"), skipping a run glued to or right after an English-looking
+  token ("Python 3", "v2", "0.74" after a name stay as they are) — ported from `itn.js`'s
+  `persianDigits()`. Farsight's existing spelled-out-number ITN (`persian_itn()`, "بیست و پنج"→"۲۵")
+  turned out to already be more grammar-aware than Avan's version (handles scale ordering, "two
+  components without و", etc.) — nothing to port there, it was a gap in the opposite direction.
+- **Not done yet:** lexicon correction + sound-alike respelling (`lexicon.js`), curated
+  English-term/acronym substitution (`latin.js`), systematic English-word detection (`english.js`),
+  and wiring any of this chain into `sensevoice_engine.c`'s actual output path. None of today's
+  additions are called from the pipeline yet — this commit is the first slice of a larger port, not
+  a user-visible change.
+- **Status:** written and unit-tested (new C test harnesses, not part of `shim/test/` yet), not yet
+  verified end-to-end on macOS, not yet wired into the shim's output.
+
 ## 2026-10-19 — Live Enhanced Notes answered in English for Persian shorthand
 
 - **Context:** reported and reproduced with real screenshots — typed Persian shorthand into
