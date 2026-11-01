@@ -57,6 +57,28 @@ static long long room_after(long long v) {
   return -1;
 }
 
+// Is this token a bare run of digits (ASCII "200" or Persian "۲۰۰")? Shenava
+// sometimes already writes a figure as digits right next to a scale word
+// ("200 میلیون", "3 هزار"); such a figure only takes part in persian_itn()
+// when it sits directly next to that scale word, never standing alone as a
+// multi-digit "number word" (persian_itn_digits() handles plain digit runs).
+static int is_digit_tok(const char *s, size_t len, long long *v) {
+  if (len == 0) return 0;
+  long long val = 0;
+  for (size_t i = 0; i < len;) {
+    unsigned char c = (unsigned char)s[i];
+    if (c >= '0' && c <= '9') { val = val * 10 + (c - '0'); i++; continue; }
+    if (c == 0xDB && i + 1 < len && (unsigned char)s[i + 1] >= 0xB0 && (unsigned char)s[i + 1] <= 0xB9) {
+      val = val * 10 + ((unsigned char)s[i + 1] - 0xB0);
+      i += 2;
+      continue;
+    }
+    return 0;
+  }
+  *v = val;
+  return 1;
+}
+
 typedef struct {
   const char *s;
   size_t len;
@@ -88,6 +110,15 @@ static int parse_number(const Tok *t, int n, int i, long long *value) {
   while (j < n) {
     long long v;
     int k = classify(t[j].s, t[j].len, &v);
+    if (!k) {
+      long long dv;
+      if (is_digit_tok(t[j].s, t[j].len, &dv)) {
+        long long tmp;
+        int next_is_scale = j + 1 < n && classify(t[j + 1].s, t[j + 1].len, &tmp) == 2;
+        int right_after_scale = !have_cur && last_scale && expect_add;
+        if (next_is_scale || right_after_scale) { k = 1; v = dv; }
+      }
+    }
     if (k == 1) {
       if (!expect_add) break;  // two components without "و"
       if (have_cur && (room_after(last) < 0 || v > room_after(last))) break;
@@ -112,6 +143,11 @@ static int parse_number(const Tok *t, int n, int i, long long *value) {
     } else if (is_and(t[j]) && !expect_add && j + 1 < n) {
       long long nv;
       int nk = classify(t[j + 1].s, t[j + 1].len, &nv);
+      if (nk == 0 && is_digit_tok(t[j + 1].s, t[j + 1].len, &nv)) {
+        long long tmp;
+        int next_is_scale = j + 2 < n && classify(t[j + 2].s, t[j + 2].len, &tmp) == 2;
+        if (next_is_scale || last_scale) nk = 1;
+      }
       if (nk == 0) break;
       expect_add = 1;
       if (nk == 1 && have_cur && (room_after(last) < 0 || nv > room_after(last))) break;

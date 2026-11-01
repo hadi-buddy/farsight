@@ -2,6 +2,27 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-11-01 — ITN: digit+scale combos from Avan 0.30.6 ("200 میلیون", "3 هزار")
+
+- **Context:** following Avan's own CHANGELOG.md forward from the original handoff doc
+  (per the user's request to keep tracking it for anything else worth porting). Avan
+  0.30.6 added a case `persian_itn()` in Farsight didn't cover: Shenava sometimes already
+  writes a figure as digits right next to a scale word — "200 میلیون", "3 هزار" — instead
+  of spelling the whole number out. The old `classify()` in `shim/persian_itn.c` only
+  recognized spelled-out number words, so a digit token like "200" was never folded into
+  the surrounding number at all; it stayed as a raw "200 میلیون" in the output.
+- **Change:** added `is_digit_tok()` (ASCII or Persian-digit runs) to `shim/persian_itn.c`
+  and wired it into both places `parse_number()` classifies a token — the main loop and
+  the "و"-continuation branch. A digit token only joins the number when it sits directly
+  next to a scale word (as the multiplier) or right after one was just consumed — never as
+  a free-standing "number word" on its own, mirroring Avan's `digitsOk()` guard exactly
+  (`persian_itn_digits()` already owns converting a lone digit run to Persian digits, so
+  this stays narrow on purpose).
+- **Tests:** `shim/test/itn_test.c` — "200 میلیون" and "۲۰۰ میلیون" → "۲۰۰۰۰۰۰۰۰", "3 هزار"
+  → "۳۰۰۰", and a guard case "200 نفر اومدن" (no scale word next to it) stays untouched.
+  `shim/test/itn_test.sh` run in full: all green.
+- **Status:** written and tested on Linux, not yet rebuilt/run on the user's Mac.
+
 ## 2026-10-31 — Wire the Avan port into the shim's actual output (first time it runs)
 
 - **Context:** everything ported so far (spoken punctuation, extended ZWNJ, digit ITN,

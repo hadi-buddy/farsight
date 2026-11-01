@@ -47,6 +47,14 @@ int main(void) {
   check("", "");
   check("hello world", "hello world");
 
+  // A figure Shenava already wrote as digits only joins a scale word right
+  // next to it ("200 میلیون", "3 هزار") -- never as a free-standing "number
+  // word" on its own.
+  check("200 میلیون", "۲۰۰۰۰۰۰۰۰");
+  check("۲۰۰ میلیون", "۲۰۰۰۰۰۰۰۰");
+  check("3 هزار", "۳۰۰۰");
+  check("200 نفر اومدن", "200 نفر اومدن");
+
   check_digits("3 تا سیب و 10 تا پرتقال", "۳ تا سیب و ۱۰ تا پرتقال");
   check_digits("ساعت 10:30 قرار داریم", "ساعت ۱۰:۳۰ قرار داریم");
   check_digits("Python 3 و بعد v2 رو هم تست کن", "Python 3 و بعد v2 رو هم تست کن");
