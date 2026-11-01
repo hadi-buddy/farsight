@@ -18,6 +18,7 @@
 #include <time.h>
 
 #include "persian_itn.h"
+#include "persian_latin.h"
 #include "persian_lexicon.h"
 #include "persian_punctuation.h"
 #include "persian_text.h"
@@ -328,9 +329,9 @@ static void ring_push(Stream *s, const float *x, int n) {
 
 // Persian post-processing, in the same order as Avan's polish.js: spoken
 // punctuation -> symbols, character normalization, lexicon correction,
-// sound-alike respelling, spoken-number and literal-digit ITN, ZWNJ
-// orthography, sentence punctuation, then symbols restored. Latin-term and
-// systematic-English detection (toLatin/englishWords) aren't ported yet, so
+// sound-alike respelling, spoken-number and literal-digit ITN, English-term
+// substitution, ZWNJ orthography, sentence punctuation, then symbols
+// restored. Systematic-English detection (english.js) isn't ported yet, so
 // that step is skipped -- everything else already runs.
 static char *postprocess(const char *raw, int complete) {
   if (g_lang != SV_LANG_PERSIAN) return strdup(raw);
@@ -357,6 +358,10 @@ static char *postprocess(const char *raw, int complete) {
   s = s2;
 
   s2 = persian_itn_digits(s);
+  free(s);
+  s = s2;
+
+  s2 = persian_to_latin(s);
   free(s);
   s = s2;
 

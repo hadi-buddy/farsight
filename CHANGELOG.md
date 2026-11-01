@@ -2,6 +2,43 @@
 
 Farsight (hadi-buddy/farsight), built on michaelpersonal/foresight-zh @ 8f15aea.
 
+## 2026-11-01 — Port latin.js: English-term substitution ("ریپو" -> repo)
+
+- **Context:** the user reported twice, with real screenshots from the macOS build, that
+  "ریپو"/"گیت هاب"/"جاوااسکریپت" weren't converting to their English spellings even after
+  the lexicon-correction + wiring commits landed. Those commits only fixed *spelling*
+  within Persian script ("گیت هاب" -> "گیت‌هاب"); nothing yet decided when a term should
+  come out in English at all. That's `latin.js`'s job (`toLatin`), and it hadn't been
+  ported.
+- **Change:** added `shim/persian_latin.h`/`.c` (`persian_to_latin()`), a straight port of
+  `avan-extension/extension/asr/latin.js`: the curated English/Persian-spelling table (114
+  entries across 77 English terms — products, companies, languages, acronyms, spec'd
+  terms), longest-span-first matching via the same sound-key/edit-distance machinery as
+  `persian_lexicon.c`, the English-suffix-glue case ("کامیتها" -> "commit‌ها"), and the
+  light-verb-phrase case ("پوش کن" -> "push کن", with the "هرج و مرج" idiom guarded so
+  "مرج" doesn't become "merge" there). The 114-entry table was generated (and round-trip
+  verified byte-for-byte against the original Persian text) from the JS source rather than
+  hand-transcribed, to rule out hex-escape mistakes on this many UTF-8 strings.
+- **Wired into the real chain:** `sensevoice_engine.c`'s `postprocess()` now calls
+  `persian_to_latin()` right after digit ITN and before ZWNJ joining, matching Avan's
+  `polish.js` order.
+- **Found and fixed a separate, pre-existing bug while here:** `shim/build.sh` (the actual
+  macOS build command) was never updated when `persian_lexicon.c`/`persian_punctuation.c`/
+  `persian_sound.c`/`strmap.c` were added in earlier commits this week — it was still only
+  listing the original file set, so the real dylib build would have failed at link time
+  with undefined symbols the next time the user ran it. Added all four, plus the new
+  `persian_latin.c`, to the `clang` invocation.
+- **Tests:** new `shim/test/latin_test.c` (single/multi-word terms, suffix-glue, the
+  push/pull/merge/clone/fork light-verb phrases, the هرج-و-مرج idiom guard, plain Persian
+  staying Persian). `shim/test/postprocess_test.c` extended: the full-chain example now
+  resolves to "GitHub رو چک کن و ۲۵ تا فایل ساختم." (previously stopped at the
+  ZWNJ-corrected Persian spelling); the دات‌کام roundtrip test's expectation was updated
+  from "گیت‌هاب.com." to "GitHub.com." since toLatin now also converts it.
+- **Verified with a real compile + link** against the actual pinned sherpa-onnx v1.13.8
+  header, same as the previous wiring commit.
+- **Status:** written and unit/integration-tested on Linux, not yet rebuilt/run on the
+  user's Mac (that rebuild will also be the first real test of the `build.sh` fix above).
+
 ## 2026-11-01 — ITN: digit+scale combos from Avan 0.30.6 ("200 میلیون", "3 هزار")
 
 - **Context:** following Avan's own CHANGELOG.md forward from the original handoff doc
